@@ -155,6 +155,10 @@ class ProjectVoiceUtil:
         indices = None if phrase_indices is None else list(phrase_indices)
         if not num_voices or indices == []:
             return []
+        if (project.get_tts_model_type().id == "fish_drama3_mlxaudio"
+                and project.get_model_setting("fish_drama3_mlxaudio", "reference_mode") == "all"):
+            # Every configured sample conditions each Fish request in this mode.
+            return [index for index, voice in enumerate(project.voice_references) if voice.has_sample] or [0]
         if project.voice_select_mode == VoiceSelectMode.AUTO_ADVANCE:
             return list(range(num_voices))
         if project.voice_select_mode == VoiceSelectMode.USER_DEFINED and indices is not None:

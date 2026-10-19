@@ -14,11 +14,12 @@ def test_sgl_omni_type_ids_are_unique():
 def test_launcher_uses_registry_handles_without_enum_name():
     import launch
 
-    assert launch.QUALIFIED_MODELS == [
+    assert [probe for probe in launch.QUALIFIED_MODELS if probe[0] != "mlx_audio"] == [
         (member.value.local_module_test, member.value.ui["proper_name"])
         for member in TtsModelType.all()
-        if member.id != "none"
+        if member.id != "none" and member.value.backend_kind is not TtsBackendKind.MLX_AUDIO
     ]
+    assert launch.QUALIFIED_MODELS.count(("mlx_audio", "Local (MLX-Audio)")) == 1
 
 
 def test_moss_server_variants_have_distinct_catalog_metadata():

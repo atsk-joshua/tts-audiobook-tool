@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from tts_audiobook_tool import model_worker
+from tts_audiobook_tool.app_support.interrupts import Interrupts
 from tts_audiobook_tool.model_manager import ModelManager
 from tts_audiobook_tool.stt import Stt
 from tts_audiobook_tool.tts import Tts
@@ -47,6 +48,25 @@ def test_model_warmup_explicitly_loads_lazy_mlx_weights(monkeypatch):
     result = ModelManager.warm_up_models(SimpleNamespace(project=project), skip_yamnet=True, want_stt=False)
     assert not result.should_stop
     assert calls == [project]
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_mlx_warmup_distinguishes_cancellation_from_load_failure(monkeypatch, cancelled):
+    interrupts = Interrupts()
+    def prepare(project):
+        monkeypatch.setattr(interrupts, "_flag", cancelled)
+        raise RuntimeError("load stopped")
+    monkeypatch.setattr(Tts, "_type", TtsModelType.require_by_id("fish_drama3_mlxaudio"))
+    monkeypatch.setattr(Tts, "instance_exists", lambda: False)
+    monkeypatch.setattr(Tts, "get_instance", lambda: SimpleNamespace(prepare_for_project=prepare))
+    monkeypatch.setattr(Stt, "should_skip", lambda _: True)
+    monkeypatch.setattr(Stt, "has_instance", lambda: False)
+    monkeypatch.setattr(Stt, "clear_stt_model", lambda: None)
+    monkeypatch.setattr(ModelManager, "clear_yamnet_detector", lambda: None)
+    monkeypatch.setattr("tts_audiobook_tool.model_manager.app_memory.gc_ram_vram", lambda: None)
+    result = ModelManager.warm_up_models(SimpleNamespace(project=object()), skip_yamnet=True, want_stt=False)
+    assert result.did_interrupt is cancelled
+    assert result.error == ("" if cancelled else "load stopped")
 
 
 @pytest.mark.parametrize("model_id", ["qwen3tts_mlxaudio", "fish_drama3_mlxaudio"])

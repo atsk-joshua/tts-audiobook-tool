@@ -254,6 +254,13 @@ class MlxAudioRuntime:
                 if self.definition.family == "fish_drama3" else "selected")
         if mode not in ("selected", "all"):
             raise ValueError(f"Invalid MLX-Audio reference mode: {mode!r}")
+        voices = project.voice_references
+        if mode == "selected" and voices:
+            voices = [voices[voice_selection_index % len(voices)]]
+        for voice in voices:
+            if voice.crop is not None and not os.path.isfile(
+                    ProjectVoiceUtil.resolve_cropped_voice_file_path(project, voice)):
+                raise ValueError(f"MLX-Audio voice reference trim does not exist: {voice.crop.file_name}")
         if mode == "all":
             if not self.policy.supports_multiple_references:
                 raise ValueError("This MLX-Audio family supports one selected reference")

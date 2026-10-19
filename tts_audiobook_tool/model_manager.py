@@ -75,8 +75,10 @@ class ModelManager:
             if Tts.get_active_type().value.backend_kind is TtsBackendKind.MLX_AUDIO:
                 tts_instance.prepare_for_project(state.project)
         except Exception as e:
-            Interrupts().clear()
+            interrupted = Interrupts().clear()
             app_memory.gc_ram_vram()
+            if interrupted and Tts.get_active_type().value.backend_kind is TtsBackendKind.MLX_AUDIO:
+                return ModelWarmUpResult(did_interrupt=True)
             return ModelWarmUpResult(error=str(e))
 
         if Interrupts().did_interrupt:

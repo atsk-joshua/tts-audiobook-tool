@@ -60,6 +60,28 @@ def test_job_voice_indices_no_sample_binding(tmp_path):
     assert ProjectVoiceUtil.get_job_voice_indices(project, [0]) == []
 
 
+@pytest.mark.parametrize("mode", list(VoiceSelectMode))
+def test_fish_all_references_preflight_includes_unassigned_samples(tmp_path, monkeypatch, mode):
+    project = make_project(tmp_path, mode)
+    project.tts_model_type = "fish_drama3_mlxaudio"
+    project.set_model_setting(project.tts_model_type, "reference_mode", "all")
+    project.voice_references = [Voice("ok.flac", "text"), Voice(), Voice("empty.flac")]
+    for name in ("ok.flac", "empty.flac"):
+        (tmp_path / name).write_bytes(b"sample")
+    monkeypatch.setattr(voice_menu_shared.SoundFileUtil, "load", lambda _: object())
+    scope = ProjectVoiceUtil.get_job_voice_indices(project, [0])
+    assert scope == [0, 2]
+    assert VoiceMenuShared.get_voice_problems(SimpleNamespace(project=project), voice_indices=scope) == [
+        "Voice file empty.flac has no transcript",
+    ]
+    project.voice_references[2] = Voice("empty.flac", "original", VoiceCrop("gone.flac", 0.0, 3.0, "trim"))
+    assert "trim" in VoiceMenuShared.get_voice_problems(
+        SimpleNamespace(project=project), voice_indices=scope)[0].lower()
+    assert ProjectVoiceUtil.get_job_voice_indices(project, []) == []
+    project.voice_references = [Voice()]
+    assert ProjectVoiceUtil.get_job_voice_indices(project, [0]) == [0]
+
+
 @pytest.mark.parametrize("mode, lines", [
     (VoiceSelectMode.DISABLED, [1, 2, 3]),
     (VoiceSelectMode.USER_DEFINED, [0, 4]),

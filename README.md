@@ -29,7 +29,7 @@ changing environments does not migrate them.
 | [dots.tts](https://github.com/studio-dots-ai/dots.tts) | ✅ | | ✅ |
 | [Echo-TTS](https://github.com/jordandare/echo-tts) | | | ✅ |
 | [FireRedTTS3](https://github.com/FireRedTeam/FireRedTTS3) | | | ✅ |
-| [Fish Audio Drama 3](https://huggingface.co/fishaudio/drama-3) | | | ✅ |
+| [Fish Audio Drama 3](https://huggingface.co/fishaudio/drama-3) | ✅ | | ✅ |
 | [Fish Speech S2-Pro](https://github.com/fishaudio/fish-speech) | ✅ | ✅ | ✅ |
 | [Fish Speech S1-mini](https://github.com/fishaudio/fish-speech) | ✅ | | |
 | [Fun-CosyVoice3](https://github.com/QwenAudio/CosyVoice) | | ✅ | ✅ |

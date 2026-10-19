@@ -89,8 +89,9 @@ for member in TtsModelType.all():
     display = ("Local (MLX-Audio)" if member.value.backend_kind is TtsBackendKind.MLX_AUDIO
                else member.value.ui["proper_name"])
     probe = (member.value.local_module_test, display)
-    if probe not in QUALIFIED_MODELS:
-        QUALIFIED_MODELS.append(probe)
+    if member.value.backend_kind is TtsBackendKind.MLX_AUDIO and probe in QUALIFIED_MODELS:
+        continue
+    QUALIFIED_MODELS.append(probe)
 
 REMOTE_CLIENT_DISPLAY_MODEL = "Remote TTS client (SGL-Omni / audio.cpp)"
 

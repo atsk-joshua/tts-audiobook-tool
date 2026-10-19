@@ -401,6 +401,19 @@ def test_fish_all_references_is_explicit_and_selected_respects_index(tmp_path):
     env.runtime.kill()
 
 
+@pytest.mark.parametrize("all_references", [False, True])
+def test_missing_reference_crop_never_falls_back_to_original(tmp_path, all_references):
+    env = make_runtime(tmp_path, model_id="fish_drama3_mlxaudio", chunks=[chunk(rate=44100)])
+    env.policy.supports_multiple_references = True
+    env.project.voice_references.append(Voice(
+        "speaker.wav", "original", VoiceCrop("gone.flac", 0.0, 3.0, "trim")))
+    env.settings["reference_mode"] = "all" if all_references else "selected"
+    result = env.runtime.generate_using_project(env.project, ["hello"], voice_selection_index=1)
+    assert "trim does not exist" in result
+    assert env.loads == []
+    assert env.fake.calls == []
+
+
 def test_prepared_reference_cache_bounded_across_reference_changes(tmp_path):
     env = make_runtime(tmp_path)
     env.runtime.MAX_PREPARED_REFERENCES = 2
