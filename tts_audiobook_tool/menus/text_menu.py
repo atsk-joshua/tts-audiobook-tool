@@ -25,6 +25,9 @@ from tts_audiobook_tool.textual.text_editor import TextEditor
 from tts_audiobook_tool.textual.word_substitutions_app import WordSubstitutionsApp
 from tts_audiobook_tool.tts import Tts
 from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
+from tts_audiobook_tool.tts_models.segmentation_capabilities import (
+    resolve_segmentation_capabilities,
+)
 from tts_audiobook_tool.util import *
 from tts_audiobook_tool.constants import *
 
@@ -85,6 +88,7 @@ class TextMenu:
 
         MenuUtil.menu(
             state, make_heading, make_items,
+            subheading=lambda _: make_segmentation_advisory(state.project, state.project.max_words),
             hint=HINT_LINE_BREAKS, breadcrumb="Text"
         )
 
@@ -142,7 +146,7 @@ class TextMenu:
             state,
             heading="Segmentation settings",
             items=items_maker,
-            subheading=SEG_SUBHEADING,
+            subheading=lambda _: make_segmentation_settings_description(state.project),
             breadcrumb="Segmentation settings",
         )
 
@@ -452,21 +456,55 @@ def on_ask_max_size(state: State, _) -> None:
 
     MenuUtil.print_screen_heading(state, "Max words per segment")
 
-    printt("On text import, this is the maximum number of words to be used for a single text segment.")
+    printt("This maximum applies to future text imports. Existing text and audio keep their applied segmentation.")
 
-    reco = Tts.get_model_support(state.project).get_max_words_range_reco(state.project)
+    capabilities = resolve_segmentation_capabilities(state.project)
+    reco = (capabilities.recommended_min_words, capabilities.recommended_max_words, "")
     printt(f"Recommended range: {COL_ACCENT}{TtsModelType.recommended_range_string(reco)}")
+    warning = make_segmentation_advisory(state.project, state.project.max_words)
+    if warning:
+        printt(warning)
     printt()
 
     ask.ask_number_and_save(
         state.project,
         target="max_words",
         prompt="Enter max words per segment:",
-        min_value=MAX_WORDS_PER_SEGMENT_MIN, max_value=MAX_WORDS_PER_SEGMENT_MAX,
-        default_value=MAX_WORDS_PER_SEGMENT_DEFAULT,
+        min_value=capabilities.min_words, max_value=capabilities.max_words,
+        default_value=capabilities.default_words,
         success_prefix="Max words per segment set to:",
         is_int=True
     )
+    warning = make_segmentation_advisory(state.project, state.project.max_words)
+    if warning:
+        printt(warning)
+
+
+def make_segmentation_advisory(project: Project, max_words: int) -> str:
+    """Describe model compatibility without altering a saved or applied limit."""
+    capabilities = resolve_segmentation_capabilities(project)
+    messages = []
+    if max_words > capabilities.max_words:
+        messages.append(
+            f"The saved {max_words}-word ceiling exceeds the selected model's "
+            f"{capabilities.max_words}-word configurable maximum. Choose a compatible "
+            "model or explicitly change the settings for a future import."
+        )
+    return "\n".join(messages)
+
+
+def make_segmentation_settings_description(project: Project) -> str:
+    description = SEG_SUBHEADING
+    if project.phrase_groups:
+        applied = project.book.segmentation_settings
+        description += (
+            f"\n\nCurrent book: {applied.max_words_per_segment} words per segment; "
+            f"{applied.strategy.label.lower()}."
+        )
+    warning = make_segmentation_advisory(project, project.max_words)
+    if warning:
+        description += "\n\n" + warning
+    return description
 
 def make_edit_substitutions_label(state: State) -> str:
     count = len(state.project.word_substitutions)
@@ -484,8 +522,9 @@ def make_subst_label(state: State) -> str:
 
 
 SEG_SUBHEADING = \
-"""On import, text will be segmented into sentences and phrases using the settings
-shown below. Project language code can also affect how the text is segmented."""
+"""These settings apply to future imports. Changing them or the selected model
+keeps the current book's text, audio, voices and section markers unchanged.
+Project language code can also affect how imported text is segmented."""
 
 DIALOG_SEGMENTATION_DESC = \
 f"""Detects and splits dialog from surrounding narration,

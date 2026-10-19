@@ -10,6 +10,9 @@ from textual.widgets import Static
 
 from tts_audiobook_tool.constants import COL_DEFAULT, COL_DIM
 from tts_audiobook_tool.project import Project
+from tts_audiobook_tool.tts_models.segmentation_capabilities import (
+    resolve_segmentation_capabilities,
+)
 
 
 class SegmentationInfoDialog(ModalScreen[None]):
@@ -64,6 +67,16 @@ class SegmentationInfoDialog(ModalScreen[None]):
                 f"{settings.language_code or '(none)'}"
             ),
         ]
+        capabilities = resolve_segmentation_capabilities(self.project)
+        advisory = ""
+        if settings.max_words_per_segment > capabilities.max_words:
+            advisory += (
+                f"\nThe selected model's configurable maximum is "
+                f"{capabilities.max_words} words. The editor retains this book's "
+                "applied limit; use a compatible model for generation."
+            )
+        if advisory:
+            info_lines.extend(["", advisory.strip()])
         yield Vertical(
             Static(
                 Text.from_ansi("\n".join(info_lines)),

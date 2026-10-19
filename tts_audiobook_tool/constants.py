@@ -58,6 +58,9 @@ WHISPER_SAMPLERATE = 16000
 MAX_WORDS_PER_SEGMENT_DEFAULT = 40
 MAX_WORDS_PER_SEGMENT_MIN = 20
 MAX_WORDS_PER_SEGMENT_MAX = 80
+# Storage admits experimental long-form settings independently of the selected
+# model. Runtime capabilities decide which prompts a model may receive.
+MAX_WORDS_PER_SEGMENT_STORAGE_MAX = 320
 MAX_WORDS_PER_SEGMENT_RECO_RANGE = (40, 80, "")
 
 TOP_P_MIN_DEFAULT = 0.01

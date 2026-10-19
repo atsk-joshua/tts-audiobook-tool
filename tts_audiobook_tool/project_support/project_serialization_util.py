@@ -347,7 +347,7 @@ class ProjectSerializationUtil:
             'max_words',
             MAX_WORDS_PER_SEGMENT_DEFAULT,
             min_value=MAX_WORDS_PER_SEGMENT_MIN,
-            max_value=MAX_WORDS_PER_SEGMENT_MAX,
+            max_value=MAX_WORDS_PER_SEGMENT_STORAGE_MAX,
         )
 
         normalize_bool('dialog_segmentation', False)
