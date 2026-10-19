@@ -580,12 +580,18 @@ SS_MAX_LEN_DESC = \
       \"max words per segment\" to the nearest sentence or phrase boundary.
       This maximizes text length per TTS generation."""
 
+SS_BALANCED_DESC = \
+"""    Within each paragraph, group existing phrases toward three quarters of
+      \"max words per segment\", preferring complete sentences and avoiding
+      very short prompts. Longer prompts remain opt-in."""
+
 class SegmentationStrategy(tuple[str, str, str], Enum):
 
     SENTENCE = "sentence", "Sentence", SS_SENTENCE_DESC
     SENTENCE_PLUS = "normal", "Sentence+", SS_SENTENCE_PLUS_DESC
     MULTI_SENTENCE = "multi", "Multiple sentences", SS_MULTI_DESC
     MAX_LEN = "max_len", "Maximized word count", SS_MAX_LEN_DESC
+    BALANCED = "balanced", "Balanced sentences", SS_BALANCED_DESC
 
     @property
     def id(self) -> str:
