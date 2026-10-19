@@ -629,6 +629,23 @@ class Tts:
             )
             for prompt in prompts
         ]
+        # Check MLX's experimental prompt ceiling without introducing a hard
+        # synthesis limit for existing backends and unsplit callers such as chat.
+        if prepared_prompts and Tts._type.value.backend_kind is TtsBackendKind.MLX_AUDIO:
+            from tts_audiobook_tool.app_support import app_text
+            from tts_audiobook_tool.tts_models.segmentation_capabilities import (
+                prompt_word_limit_issue, resolve_segmentation_capabilities,
+            )
+            capabilities = resolve_segmentation_capabilities(project)
+            # Count normalized spoken prompts, including substitutions, and
+            # check the entire batch before handing any prompt to the model.
+            for index, prompt in enumerate(prepared_prompts):
+                word_count = len(app_text.get_words(prompt, vocalizable_only=True))
+                issue = prompt_word_limit_issue(
+                    capabilities, word_count
+                )
+                if issue:
+                    return f"Prompt {index + 1}: {issue}"
         if log_prompts:
             for prepared_prompt in prepared_prompts:
                 L.d(f"TTS prompt: chars={len(prepared_prompt)} | {prepared_prompt!r}")

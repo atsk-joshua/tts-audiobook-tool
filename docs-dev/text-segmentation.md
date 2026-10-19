@@ -246,6 +246,13 @@ This is a structural preference; human listening must establish prosody quality.
 
 All strategies receive a final max-word grouping pass. An already indivisible phrase that exceeds the limit remains as one non-empty group.
 
+The default remains 40 words. Future-import ceilings can persist from 20 through
+320 without regrouping an existing book. The selected model controls the allowed
+range; supported MLX Qwen/Fish checkpoints allow 320, while other backends retain
+80 for future imports. Switching models preserves saved and applied settings.
+MLX prompts are checked before inference; existing backends retain their synthesis
+behavior. Word counts do not replace native acoustic frame budgets.
+
 ## Interaction with dialog segmentation
 
 Dialog segmentation is optional and runs after normal grouping. Its detailed behavior is documented in [dialog-segmentation.md](dialog-segmentation.md).
