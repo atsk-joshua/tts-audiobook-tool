@@ -256,6 +256,16 @@ a saved ceiling within the selected model's range.
 MLX prompts are checked before inference; existing backends retain their synthesis
 behavior. Word counts do not replace native acoustic frame budgets.
 
+### `NARRATIVE` (experimental)
+
+Eligible consecutive EPUB prose paragraphs can share one generation request.
+Verified heading ranges, scene/section breaks, dialogue and voice changes remain
+barriers. Unknown heading provenance (including plain/manual text) falls back to
+paragraph-local Balanced grouping. Fish retains paragraph delimiters for books
+imported with this strategy, letting its native chunker propagate acoustic history
+within each call. Interior pauses use model timing. Existing books are not
+regrouped, and phrase identities, source order and alignment contracts are retained.
+
 ## Interaction with dialog segmentation
 
 Dialog segmentation is optional and runs after normal grouping. Its detailed behavior is documented in [dialog-segmentation.md](dialog-segmentation.md).

@@ -45,12 +45,16 @@ class EpubTextChapter:
     title: str
     href: str
     text: str
+    # Half-open character ranges in this object's exact normalized text.
+    # None means unknown/incomplete provenance; [] means verified no h1-h6 text.
+    heading_spans: list[tuple[int, int]] | None = None
 
 
 @dataclass
 class EpubTextSlice:
     text: str
     navigation_target: EpubNavigationTarget | None = None
+    heading_spans: list[tuple[int, int]] | None = None
 
 
 @dataclass
@@ -60,6 +64,21 @@ class EpubTextExtractionResult:
     significant_warnings: list[str] = field(default_factory=list)
     slices: list[EpubTextSlice] = field(default_factory=list)
     has_unresolved_navigation_target: bool = False
+    heading_spans: list[tuple[int, int]] | None = None
+
+
+def _validated_heading_spans(text: str, spans) -> list[tuple[int, int]] | None:
+    """Copy known ranges, or fail closed on unknown/malformed provenance."""
+    if not isinstance(spans, (list, tuple)):
+        return None
+    result = []
+    for span in spans:
+        if (not isinstance(span, (list, tuple)) or len(span) != 2
+                or any(type(value) is not int for value in span)
+                or not 0 <= span[0] < span[1] <= len(text)):
+            return None
+        result.append((span[0], span[1]))
+    return result
 
 
 @dataclass
@@ -189,18 +208,21 @@ class BeautifulSoupEpubChapterTextExtractor:
 
         root = soup.body or soup
         pieces: list[str] = []
+        heading_piece_spans: list[tuple[int, int]] = []
         self.append_node_text(
             root,
             pieces,
             stats,
             target_fragments=target_fragments,
             anchor_piece_indices=anchor_piece_indices,
+            heading_piece_spans=heading_piece_spans,
         )
-        text = self.normalize_output_text("".join(pieces))
+        text, heading_spans = self.normalize_text_with_heading_spans(pieces, heading_piece_spans)
         slices, navigation_warnings, has_unresolved_navigation_target = self.make_text_slices(
             chapter,
             pieces,
             anchor_piece_indices,
+            heading_piece_spans=heading_piece_spans,
         )
         warnings.extend(navigation_warnings)
         significant_warnings.extend(navigation_warnings)
@@ -226,6 +248,7 @@ class BeautifulSoupEpubChapterTextExtractor:
             significant_warnings=significant_warnings,
             slices=slices,
             has_unresolved_navigation_target=has_unresolved_navigation_target,
+            heading_spans=heading_spans,
         )
 
     @classmethod
@@ -284,6 +307,7 @@ class BeautifulSoupEpubChapterTextExtractor:
             stats: EpubTextExtractionStats,
             target_fragments: set[str] | None = None,
             anchor_piece_indices: dict[str, int] | None = None,
+            heading_piece_spans: list[tuple[int, int]] | None = None,
     ) -> None:
         name = getattr(node, "name", None)
 
@@ -297,6 +321,7 @@ class BeautifulSoupEpubChapterTextExtractor:
 
         if name in self.SKIP_TAGS:
             return
+        heading_start = len(pieces) if name in {"h1", "h2", "h3", "h4", "h5", "h6"} else None
         if name == "br":
             pieces.append("\n")
             return
@@ -326,10 +351,67 @@ class BeautifulSoupEpubChapterTextExtractor:
                         stats,
                         target_fragments=target_fragments,
                         anchor_piece_indices=anchor_piece_indices,
+                        heading_piece_spans=heading_piece_spans,
                     )
 
         if is_block:
             pieces.append("\n\n")
+        if heading_start is not None and heading_piece_spans is not None:
+            heading_piece_spans.append((heading_start, len(pieces)))
+
+    @classmethod
+    def normalize_text_with_heading_spans(
+            cls,
+            pieces: list[str],
+            heading_piece_spans: list[tuple[int, int]] | None,
+            start_piece_index: int = 0,
+            end_piece_index: int | None = None,
+    ) -> tuple[str, list[tuple[int, int]] | None]:
+        """Project emitted h1-h6 intervals without changing normalization.
+
+        Normalize each slice independently, just as the existing navigation
+        pipeline does. A heading crossing a slice boundary protects its emitted
+        fragment on each side. Prefix/subsequence agreement is checked exactly;
+        ambiguous projection returns unknown, never a guessed text match.
+        """
+        end_piece_index = len(pieces) if end_piece_index is None else end_piece_index
+        raw = "".join(pieces[start_piece_index:end_piece_index])
+        text = cls.normalize_output_text(raw)
+        if heading_piece_spans is None:
+            return text, None
+        offsets = [0]
+        for piece in pieces:
+            offsets.append(offsets[-1] + len(piece))
+        scope_start, scope_end = offsets[start_piece_index], offsets[end_piece_index]
+        spans = []
+        for span in heading_piece_spans:
+            if (not isinstance(span, (list, tuple)) or len(span) != 2
+                    or any(type(value) is not int for value in span)
+                    or not 0 <= span[0] <= span[1] <= len(pieces)):
+                return text, None
+            start = max(offsets[span[0]], scope_start) - scope_start
+            end = min(offsets[span[1]], scope_end) - scope_start
+            if end <= start:
+                continue
+            fragment = cls.normalize_output_text(raw[start:end])
+            if not fragment:
+                continue
+            prefix = cls.normalize_output_text(raw[:end])
+            if not prefix.endswith(fragment) or not text.startswith(prefix):
+                return text, None
+            first, last = len(prefix) - len(fragment), len(prefix)
+            if text[first:last] != fragment:
+                return text, None
+            spans.append((first, last))
+        # Nested/malformed HTML may emit overlapping heading elements. Their
+        # union remains conservative while retaining exact normalized offsets.
+        merged: list[tuple[int, int]] = []
+        for start, end in sorted(spans):
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
+            else:
+                merged.append((start, end))
+        return text, _validated_heading_spans(text, merged)
 
     @classmethod
     def make_text_slices(
@@ -337,6 +419,7 @@ class BeautifulSoupEpubChapterTextExtractor:
             chapter: EpubSourceChapter,
             pieces: list[str],
             anchor_piece_indices: dict[str, int],
+            heading_piece_spans: list[tuple[int, int]] | None = None,
     ) -> tuple[list[EpubTextSlice], list[str], bool]:
         warnings: list[str] = []
         has_unresolved_navigation_target = False
@@ -388,17 +471,17 @@ class BeautifulSoupEpubChapterTextExtractor:
         start_piece_index = 0
         current_target: EpubNavigationTarget | None = None
         for piece_index, target in accepted_boundaries:
-            raw_text = "".join(pieces[start_piece_index:piece_index])
-            normalized_text = cls.normalize_output_text(raw_text)
+            normalized_text, heading_spans = cls.normalize_text_with_heading_spans(
+                pieces, heading_piece_spans, start_piece_index, piece_index)
             if normalized_text or current_target is not None:
-                slices.append(EpubTextSlice(normalized_text, current_target))
+                slices.append(EpubTextSlice(normalized_text, current_target, heading_spans))
             current_target = target
             start_piece_index = piece_index
 
-        raw_text = "".join(pieces[start_piece_index:])
-        normalized_text = cls.normalize_output_text(raw_text)
+        normalized_text, heading_spans = cls.normalize_text_with_heading_spans(
+            pieces, heading_piece_spans, start_piece_index)
         if normalized_text or current_target is not None or not slices:
-            slices.append(EpubTextSlice(normalized_text, current_target))
+            slices.append(EpubTextSlice(normalized_text, current_target, heading_spans))
         return slices, warnings, has_unresolved_navigation_target
 
     @classmethod
@@ -572,6 +655,8 @@ class EpubExtractor:
                 strategy=segmentation_strategy,
                 pysbd_lang=language_code,
                 dialog_segmentation=dialog_segmentation,
+                **({"narrative_heading_spans": chapter.heading_spans}
+                   if segmentation_strategy.id == "narrative" else {}),
             )
             if phrase_groups:
                 markers.append(len(phrase_groups))
@@ -642,6 +727,7 @@ class EpubExtractor:
                 title=source_chapter.title,
                 href=source_chapter.href,
                 text=result.text,
+                heading_spans=_validated_heading_spans(result.text, getattr(result, "heading_spans", None)),
             )
             for source_chapter, result in extracted_chapters
             if result.text.strip()
@@ -655,21 +741,32 @@ class EpubExtractor:
     ) -> tuple[list[EpubTextChapter], bool]:
         text_chapters: list[EpubTextChapter] = []
         text_parts: list[str] = []
+        heading_parts: list[list[tuple[int, int]] | None] = []
         current_target: EpubNavigationTarget | None = None
         fallback_title = ""
         fallback_href = ""
         used_navigation = False
 
         def flush_text_chapter() -> None:
-            nonlocal text_parts, current_target, fallback_title, fallback_href, used_navigation
+            nonlocal text_parts, heading_parts, current_target, fallback_title, fallback_href, used_navigation
             if not text_parts:
                 return
             # Merged pseudo-sections keep a section-like boundary: two blank lines between parts.
             title = current_target.title if current_target is not None else fallback_title
             href = current_target.href if current_target is not None else fallback_href
-            text_chapters.append(EpubTextChapter(title=title, href=href, text="\n\n\n".join(text_parts)))
+            heading_spans: list[tuple[int, int]] | None = []
+            offset = 0
+            for part, spans in zip(text_parts, heading_parts):
+                if spans is None:
+                    heading_spans = None
+                    break
+                heading_spans.extend((start + offset, end + offset) for start, end in spans)
+                offset += len(part) + 3
+            text_chapters.append(EpubTextChapter(title=title, href=href, text="\n\n\n".join(text_parts),
+                                                heading_spans=heading_spans))
             used_navigation = used_navigation or current_target is not None
             text_parts = []
+            heading_parts = []
             current_target = None
             fallback_title = ""
             fallback_href = ""
@@ -684,7 +781,7 @@ class EpubExtractor:
                     if not target.fragment
                 ]
                 document_target = max(document_targets, key=lambda target: target.order, default=None)
-                slices = [EpubTextSlice(result.text, document_target)]
+                slices = [EpubTextSlice(result.text, document_target, getattr(result, "heading_spans", None))]
             for text_slice in slices:
                 if text_slice.navigation_target is not None:
                     if text_parts:
@@ -703,6 +800,7 @@ class EpubExtractor:
                         fallback_title = source_chapter.title
                         fallback_href = source_chapter.href
                     text_parts.append(text_slice.text)
+                    heading_parts.append(_validated_heading_spans(text_slice.text, getattr(text_slice, "heading_spans", None)))
 
             if (
                 not result.text.strip()

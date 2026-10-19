@@ -1,4 +1,5 @@
 import re
+from bisect import bisect_right
 
 from tts_audiobook_tool.app_types import SegmentationStrategy
 from tts_audiobook_tool.app_types.phrase import PhraseGroup
@@ -24,6 +25,7 @@ class PhraseGrouper:
             pysbd_lang: str="en",
             dialog_segmentation: bool=False,
             target_words: int | None=None,
+            narrative_heading_spans: list[tuple[int, int]] | None=None,
     ) -> list[PhraseGroup]:
         """
         Creates PhraseGroups using the passed-in raw source text.
@@ -37,7 +39,20 @@ class PhraseGrouper:
         attribution with reason PHRASE_QUOTE_END (a lowercase continuation, or
         for language code "en" a speaker name followed by a whitelisted verb).
         It does not recombine groups created by the normal segmentation passes.
+
+        NARRATIVE requires verified heading spans in this exact incoming text.
+        An empty list certifies no headings; None or invalid ranges conservatively
+        uses paragraph-local BALANCED. No source-text search repairs provenance.
         """
+        if strategy == SegmentationStrategy.NARRATIVE:
+            mapped = PhraseGrouper._normalize_narrative_heading_spans(text, narrative_heading_spans)
+            if mapped is not None:
+                from tts_audiobook_tool.text_ops.narrative_grouper import plan_narrative_groups
+                source, spans = mapped
+                return plan_narrative_groups(source, max_words, pysbd_lang,
+                    dialog_segmentation=dialog_segmentation, protected_spans=spans,
+                    protect_section_opening=True)
+            strategy = SegmentationStrategy.BALANCED
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         # This guarantees that imported text has no blank lines containing
         # whitespace, and that no other line ends with spaces or tabs.
@@ -93,6 +108,50 @@ class PhraseGrouper:
         groups = PhraseGrouper.merge_ornamental_groups(groups)
 
         return groups
+
+    @staticmethod
+    def _normalize_narrative_heading_spans(text, spans):
+        """Map verified raw offsets through only the common deleted characters.
+
+        CR-to-LF substitutions retain positions; CRLF removes CR, pre-newline
+        horizontal space is removed, and leading normalized LFs are removed.
+        Prefix sums over merged deletions translate endpoints without guessing
+        heading text. Malformed, overlapping or vanished ranges fail closed.
+        """
+        if not isinstance(spans, (list, tuple)):
+            return None
+        checked = []
+        prior_end = 0
+        for span in spans:
+            if (not isinstance(span, (list, tuple)) or len(span) != 2
+                    or any(type(value) is not int for value in span)
+                    or not 0 <= span[0] < span[1] <= len(text) or span[0] < prior_end):
+                return None
+            checked.append(tuple(span))
+            prior_end = span[1]
+        prefix = re.match(r"(?:[ \t]*(?:\r\n|\r|\n))*", text).end()
+        deletions = [(0, prefix)] if prefix else []
+        for match in re.finditer(r"\r(?=\n)|[ \t]+(?=\r|\n)", text):
+            start, end = match.span()
+            if deletions and start <= deletions[-1][1]:
+                deletions[-1] = (deletions[-1][0], max(end, deletions[-1][1]))
+            else:
+                deletions.append((start, end))
+        ends, removed = [], [0]
+        for start, end in deletions:
+            ends.append(end)
+            removed.append(removed[-1] + end - start)
+
+        def endpoint(point):
+            index = bisect_right(ends, point)
+            partial = max(0, point - deletions[index][0]) if index < len(deletions) else 0
+            return point - removed[index] - partial
+
+        normalized = re.sub(r"[ \t]+\n", "\n", text.replace("\r\n", "\n").replace("\r", "\n")).lstrip("\n")
+        mapped = [(endpoint(start), endpoint(end)) for start, end in checked]
+        if any(not 0 <= start < end <= len(normalized) for start, end in mapped):
+            return None
+        return normalized, mapped
 
     @staticmethod
     def balanced_groups(

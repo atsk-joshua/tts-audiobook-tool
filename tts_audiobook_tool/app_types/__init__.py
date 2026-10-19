@@ -585,6 +585,13 @@ SS_BALANCED_DESC = \
       \"max words per segment\", preferring complete sentences and avoiding
       very short prompts. Paragraph and scene boundaries are preserved."""
 
+SS_NARRATIVE_DESC = \
+"""    Experimental EPUB narration: pack complete paragraphs when verified heading
+      ranges are available, retaining headings, dialogue and scene boundaries.
+      Paragraph timing inside a prompt is controlled by the native model and
+      is experimental. Plain text, manual input and unknown heading provenance
+      use paragraph-local Balanced grouping. Existing books are unchanged."""
+
 class SegmentationStrategy(tuple[str, str, str], Enum):
 
     SENTENCE = "sentence", "Sentence", SS_SENTENCE_DESC
@@ -592,6 +599,7 @@ class SegmentationStrategy(tuple[str, str, str], Enum):
     MULTI_SENTENCE = "multi", "Multiple sentences", SS_MULTI_DESC
     MAX_LEN = "max_len", "Maximized word count", SS_MAX_LEN_DESC
     BALANCED = "balanced", "Balanced sentences", SS_BALANCED_DESC
+    NARRATIVE = "narrative", "Narrative paragraphs (experimental)", SS_NARRATIVE_DESC
 
     @property
     def id(self) -> str:
