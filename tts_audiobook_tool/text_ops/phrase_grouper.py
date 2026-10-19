@@ -8,6 +8,7 @@ from tts_audiobook_tool.text_ops.dialog_segmenter import (
     DIALOG_VOICE_INDEX,
     DialogSegmenter,
 )
+from tts_audiobook_tool.text_ops.quote_spans import find_quote_spans
 from tts_audiobook_tool.util import printt
 
 class PhraseGrouper:
@@ -22,6 +23,7 @@ class PhraseGrouper:
             strategy: SegmentationStrategy=SegmentationStrategy.SENTENCE_PLUS,
             pysbd_lang: str="en",
             dialog_segmentation: bool=False,
+            target_words: int | None=None,
     ) -> list[PhraseGroup]:
         """
         Creates PhraseGroups using the passed-in raw source text.
@@ -41,6 +43,12 @@ class PhraseGrouper:
         # whitespace, and that no other line ends with spaces or tabs.
         text = re.sub(r"[ \t]+\n", "\n", text)
 
+        if strategy == SegmentationStrategy.BALANCED:
+            if max_words <= 0:
+                raise ValueError("max_words must be positive")
+            if target_words is not None and not 1 <= target_words <= max_words:
+                raise ValueError("target_words must be between 1 and max_words")
+
         phrases = PhraseSegmenter.text_to_phrases(text, max_words=max_words, pysbd_lang=pysbd_lang)
 
         # First group by either complete sentence or paragraph
@@ -53,7 +61,12 @@ class PhraseGrouper:
                 reason_threshold = Reason.SENTENCE # (will re-combine sentences later)
             case SegmentationStrategy.MAX_LEN:
                 reason_threshold = Reason.PARAGRAPH
-        groups = PhraseGrouper.phrases_to_groups_by_reason(phrases, reason_threshold)
+            case SegmentationStrategy.BALANCED:
+                reason_threshold = Reason.PARAGRAPH
+        if strategy == SegmentationStrategy.BALANCED:
+            groups = PhraseGrouper.balanced_groups(phrases, max_words, target_words)
+        else:
+            groups = PhraseGrouper.phrases_to_groups_by_reason(phrases, reason_threshold)
 
         if strategy == SegmentationStrategy.SENTENCE_PLUS:
             # Mitigates tts glitches due to too-short prompts
@@ -80,6 +93,102 @@ class PhraseGrouper:
         groups = PhraseGrouper.merge_ornamental_groups(groups)
 
         return groups
+
+    @staticmethod
+    def balanced_groups(
+            phrases: list[Phrase],
+            max_words: int,
+            target_words: int | None = None,
+    ) -> list[PhraseGroup]:
+        """Pack existing phrases deterministically without crossing paragraphs.
+
+        A bounded dynamic program trades prompt count and squared distance from
+        the target against weaker cut positions. Costs are expressed in units
+        of one target-sized prompt: a phrase cut costs four such units, an
+        arbitrary word cut eight, and a cut inside a balanced quote one extra.
+        These are structural preferences, not claims about audio quality.
+
+        Text and reasons are retained; dialog classification still runs later.
+        A phrase exceeding the cap is retained alone, as in the legacy splitter.
+        Normal input has at least one counted word per phrase. The explicit
+        predecessor bound also caps work for degenerate zero-word input, giving
+        O(P * min(P, max_words)) time and O(P) space per paragraph.
+        """
+        if max_words <= 0:
+            raise ValueError("max_words must be positive")
+        target = max(1, max_words * 3 // 4) if target_words is None else target_words
+        if not 1 <= target <= max_words:
+            raise ValueError("target_words must be between 1 and max_words")
+
+        result: list[PhraseGroup] = []
+        paragraphs = PhraseGrouper.phrases_to_groups_by_reason(phrases, Reason.PARAGRAPH)
+        for paragraph in paragraphs:
+            items = paragraph.phrases
+            count = len(items)
+            if not count:
+                continue
+            prefix = [0]
+            offsets = [0]
+            for phrase in items:
+                prefix.append(prefix[-1] + phrase.num_words)
+                offsets.append(offsets[-1] + len(phrase.text))
+
+            # Sweep quote ranges once, including nested ranges, rather than
+            # rescanning every quote at every candidate cut.
+            spans = find_quote_spans("".join(phrase.text for phrase in items))
+            quote_index = 0
+            quote_end = 0
+            cut_costs = [0] * (count + 1)
+            unit = target * target
+            weak_cut_cost = {
+                Reason.UNDEFINED: 8,
+                Reason.WORD: 8,
+                Reason.PHRASE_QUOTE_END: 6,
+                Reason.PHRASE: 4,
+            }
+            for end in range(1, count):
+                offset = offsets[end]
+                while quote_index < len(spans) and spans[quote_index].start < offset:
+                    quote_end = max(quote_end, spans[quote_index].end)
+                    quote_index += 1
+                quote_cost = int(offset < quote_end)
+                cut_costs[end] = unit * (weak_cut_cost.get(items[end - 1].reason, 0) + quote_cost)
+
+            costs: list[int | None] = [None] * (count + 1)
+            sizes = [0] * (count + 1)
+            previous = [0] * (count + 1)
+            costs[0] = 0
+            for end in range(1, count + 1):
+                best: tuple[int, int, int] | None = None
+                for start in range(end - 1, max(-1, end - max_words - 1), -1):
+                    words = prefix[end] - prefix[start]
+                    if words > max_words and start != end - 1:
+                        break
+                    # Oversized indivisible phrases may stand alone only.
+                    if words > max_words and end - start != 1:
+                        continue
+                    prior_cost = costs[start]
+                    if prior_cost is None:
+                        continue
+                    candidate = (
+                        prior_cost + unit + (words - target) ** 2 + cut_costs[end],
+                        sizes[start] + 1,
+                        start,
+                    )
+                    if best is None or candidate < best:
+                        best = candidate
+                assert best is not None  # Each individual phrase is admissible.
+                costs[end], sizes[end], previous[end] = best
+
+            boundaries = [count]
+            while boundaries[-1]:
+                boundaries.append(previous[boundaries[-1]])
+            boundaries.reverse()
+            result.extend(
+                PhraseGroup(items[start:end])
+                for start, end in zip(boundaries, boundaries[1:])
+            )
+        return result
 
     @staticmethod
     def merge_ornamental_groups(groups: list[PhraseGroup]) -> list[PhraseGroup]:

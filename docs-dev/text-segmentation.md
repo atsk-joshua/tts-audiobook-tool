@@ -235,6 +235,15 @@ Uses the same merging mechanism with a deliberately high shortness threshold, co
 
 Initially groups through paragraph boundaries rather than sentence boundaries, then applies the maximum-word constraint.
 
+### `BALANCED`
+
+Opt-in balanced grouping keeps paragraph-or-stronger boundaries and packs the
+existing phrases with a bounded dynamic program. It prefers complete-sentence
+cuts, penalizes cuts inside quotes and weak phrase boundaries, and balances
+group sizes around a target (75% of the maximum unless explicitly supplied).
+It preserves phrase text/reasons and runs the same downstream dialog pass.
+This is a structural preference; human listening must establish prosody quality.
+
 All strategies receive a final max-word grouping pass. An already indivisible phrase that exceeds the limit remains as one non-empty group.
 
 ## Interaction with dialog segmentation
@@ -267,7 +276,7 @@ Two!"       dialog voice; PHRASE_QUOTE_END
 she said.   narration voice; SENTENCE
 ```
 
-For `SENTENCE_PLUS`, `MULTI_SENTENCE`, or `MAX_LEN`, the first two quoted sentence phrases may share a group before the dialog pass because those strategies intentionally create larger TTS prompts. The dialog pass still prevents accepted dialog and narration from sharing a final group.
+For `SENTENCE_PLUS`, `MULTI_SENTENCE`, `MAX_LEN`, or `BALANCED`, the first two quoted sentence phrases may share a group before the dialog pass because those strategies intentionally create larger TTS prompts. The dialog pass still prevents accepted dialog and narration from sharing a final group.
 
 ### Dialog classification independence
 
