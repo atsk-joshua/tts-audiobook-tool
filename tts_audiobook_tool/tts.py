@@ -84,6 +84,7 @@ class Tts:
     _pocket: PocketBaseModel | None = None
     _qwen3: Qwen3BaseModel | None = None
     _vibevoice: VibeVoiceBaseModel | None = None
+    _mlx_audio: TtsBaseModel | None = None
 
     # Capability discovery is independent of the project-bound runtime type.
     _available_local_models: tuple[TtsModelType, ...] = ()
@@ -231,13 +232,16 @@ class Tts:
 
         def get_matches() -> list[TtsModelType]:
             model_infos = []
+            probes: dict[str, bool] = {}
             for model_info in TtsModelType.all():
                 exists = False
                 try:
                     module_test = model_info.value.local_module_test
                     if not module_test:
                         continue
-                    if module_test.startswith("dist:"):
+                    if module_test in probes:
+                        exists = probes[module_test]
+                    elif module_test.startswith("dist:"):
                         dist_test = module_test.removeprefix("dist:").strip()
                         if "==" in dist_test:
                             dist_name, expected_version = [part.strip() for part in dist_test.split("==", 1)]
@@ -249,6 +253,7 @@ class Tts:
                         exists = util.find_spec(module_test) is not None
                 except:
                     ...
+                probes[module_test] = exists
                 if exists:
                     model_infos.append(model_info)
             return model_infos
@@ -300,8 +305,8 @@ class Tts:
         Exact server-entry pairs remain in the snapshot for runtime resolution.
         """
         if not Tts.is_remote_mode():
-            if len(Tts._available_local_models) > 1:
-                raise RuntimeError("More than one supported local TTS model library is installed")
+            if not Tts.has_compatible_local_models():
+                raise RuntimeError("More than one supported local TTS model library is installed; use a dedicated environment for MLX-Audio or one Native Local stack")
             return list(Tts._available_local_models)
         from tts_audiobook_tool.app_support.remote_tts_discovery import RemoteTtsDiscovery
         snapshot = RemoteTtsDiscovery.refresh(force=refresh)
@@ -314,14 +319,21 @@ class Tts:
     def reconcile_project_model(project: Project) -> TtsModelType | None:
         """Reconcile an interactive selection; return the changed type, if any.
 
-        Local mode forces the installed model, or NONE when none is available.
+        Legacy local mode forces the installed model, or NONE when none is available.
+        An MLX environment preserves explicit saved choices across its families.
         In remote mode, failed/empty discovery must not discard a saved selection.
         Runtime binding remains separate and never mutates the Project, so
         workers and metadata-only callers do not auto-select.
         """
         available = Tts.get_available_tts_models()
-        if Tts.is_remote_mode():
-            if not available or any(model.id == project.tts_model_type for model in available):
+        mlx_environment = not Tts.is_remote_mode() and bool(available) and all(
+            model.value.backend_kind is TtsBackendKind.MLX_AUDIO for model in available
+        )
+        if Tts.is_remote_mode() or mlx_environment:
+            # MLX is a multi-family stack: retain the explicit project choice,
+            # including an unavailable one, until the user chooses a replacement.
+            if (not available or any(model.id == project.tts_model_type for model in available)
+                    or (mlx_environment and project.tts_model_type != "none")):
                 return None
         model = available[0] if len(available) == 1 else TtsModelType.require_by_id("none")
         if project.tts_model_type == model.id:
@@ -330,13 +342,25 @@ class Tts:
         return model
 
     @staticmethod
+    def is_mlx_audio_environment() -> bool:
+        return bool(Tts._available_local_models) and all(
+            model.value.backend_kind is TtsBackendKind.MLX_AUDIO
+            for model in Tts._available_local_models
+        )
+
+    @staticmethod
+    def has_compatible_local_models() -> bool:
+        """Many MLX families share one stack; legacy stacks stay isolated."""
+        return len(Tts._available_local_models) <= 1 or Tts.is_mlx_audio_environment()
+
+    @staticmethod
     def get_local_model_type() -> TtsModelType:
         """Startup capability, not the active or saved project selection."""
         return Tts._available_local_models[0] if len(Tts._available_local_models) == 1 else TtsModelType.require_by_id("none")
 
     @staticmethod
     def is_local_model() -> bool:
-        return Tts._type.id != "none" and Tts._type.value.backend_kind == TtsBackendKind.LOCAL
+        return Tts._type.id != "none" and Tts._type.value.backend_kind in (TtsBackendKind.LOCAL, TtsBackendKind.MLX_AUDIO)
 
     @staticmethod
     def is_remote_mode() -> bool:
@@ -371,6 +395,10 @@ class Tts:
             "fish_s2_compile_enabled": project.get_model_setting('fish_s2_local', 'compile_enabled'),
             "pocket_model_code": project.get_model_setting('pocket_local', 'model_code'),
             "omnivoice_target": project.get_model_setting('omnivoice_local', 'target'),
+            "mlx_audio_checkpoint": (
+                project.get_model_setting(project.tts_model_type, "checkpoint")
+                if project.get_tts_model_type().value.backend_kind is TtsBackendKind.MLX_AUDIO else ""
+            ),
         }
 
     @staticmethod
@@ -387,6 +415,7 @@ class Tts:
         Tts._model_params = new_params
 
         dirty = False
+        dirty |= new_params.get("mlx_audio_checkpoint", "") != old_params.get("mlx_audio_checkpoint", "")
         dirty |= new_params.get("chatterbox_type", "") != old_params.get("chatterbox_type", "")
         dirty |= new_params.get("dots_target", "") != old_params.get("dots_target", "")
         dirty |= new_params.get("dots_compile", False) != old_params.get("dots_compile", False)
@@ -440,6 +469,8 @@ class Tts:
         Models without a loaded definition answer True, which preserves local
         and legacy behavior.
         """
+        if tts_type.value.backend_kind is TtsBackendKind.MLX_AUDIO:
+            return False
         definition = Tts._configured_definitions.get(tts_type.id)
         return definition.can_batch if definition is not None else True
 
@@ -498,9 +529,10 @@ class Tts:
             Tts._pocket,
             Tts._qwen3,
             Tts._vibevoice,
+            Tts._mlx_audio,
         ]
         for item in items:
-            if item is not None:
+            if item is not None and getattr(item, "is_loaded", True):
                 return True
         return False
 
@@ -638,6 +670,9 @@ class Tts:
         """
         if tts_type.id == "none":
             return NoneBaseModel, None, ""
+        if tts_type.value.backend_kind is TtsBackendKind.MLX_AUDIO:
+            from tts_audiobook_tool.tts_models.mlx_audio_base_model import get_mlx_audio_base_class
+            return get_mlx_audio_base_class(tts_type.id), Tts.get_mlx_audio, "_mlx_audio"
         return Tts._MODEL_REGISTRY.get(tts_type)
 
     @staticmethod
@@ -650,6 +685,16 @@ class Tts:
         if entry is None or not entry[2]:
             return None
         return getattr(Tts, entry[2])
+
+    @staticmethod
+    def get_mlx_audio() -> TtsBaseModel:
+        require_model_owner("TTS")
+        if Tts._force_cpu:
+            raise RuntimeError("Local (MLX-Audio) requires Apple Silicon / Metal; disable Force CPU")
+        if Tts._mlx_audio is None:
+            from tts_audiobook_tool.tts_models.mlx_audio_runtime import get_mlx_audio_runtime_class
+            Tts._mlx_audio = get_mlx_audio_runtime_class(Tts._type.id)(Tts._type)
+        return Tts._mlx_audio
 
     @staticmethod
     def get_chatterbox() -> ChatterboxBaseModel:
@@ -856,15 +901,20 @@ class Tts:
     def clear_tts_model() -> None:
         require_model_owner("TTS")
         model = Tts.get_instance_if_exists()
-        if model:
-            model.clear_voice_clone_cache()
-            model.kill()
-            # Null out all instance attributes, not just the current
-            # type's (there must be at most one live instance)
-            for entry in Tts._MODEL_REGISTRY.values():
-                setattr(Tts, entry[2], None)
-            Tts._configured_runtime = None
-        app_memory.gc_ram_vram()
+        try:
+            if model:
+                try:
+                    model.clear_voice_clone_cache()
+                finally:
+                    model.kill()
+        finally:
+            if model:
+                # Clear ownership even if upstream cache/decoder cleanup fails.
+                for entry in Tts._MODEL_REGISTRY.values():
+                    setattr(Tts, entry[2], None)
+                Tts._configured_runtime = None
+                Tts._mlx_audio = None
+            app_memory.gc_ram_vram()
 
     @staticmethod
     def get_available_device_types() -> list[DeviceType]:
@@ -897,7 +947,7 @@ class Tts:
         elif not Tts.is_remote_mode():
             if selected not in Tts.get_available_tts_models():
                 issue = ReadinessIssue("TTS model", "Selected TTS model is not available in this environment")
-        elif selected.value.backend_kind is TtsBackendKind.LOCAL:
+        elif selected.value.backend_kind in (TtsBackendKind.LOCAL, TtsBackendKind.MLX_AUDIO):
             issue = ReadinessIssue("TTS model", "Selected TTS model is not available in this environment")
         else:
             from tts_audiobook_tool.app_support.remote_tts_discovery import RemoteTtsDiscovery
@@ -937,6 +987,8 @@ class Tts:
         """Choose install requirements from environment capability, not Project selection."""
         if Tts.is_remote_mode():
             return "requirements-remote.txt"
+        if Tts.is_mlx_audio_environment():
+            return "requirements-mlx-audio.txt"
         local_type = Tts.get_local_model_type()
         return local_type.value.requirements_file_name if local_type.id != "none" else "requirements-base.txt"
 

@@ -181,7 +181,8 @@ def on_model(state: State, __: MenuItem) -> None:
     Tts.bind_project(state.project)
     # In remote mode, the model picker lives inside Model settings,
     # so an unselected model must not block entry.
-    if state.project.get_tts_model_type().id == "none" and not Tts.is_remote_mode():
+    if (state.project.get_tts_model_type().id == "none"
+            and not Tts.is_remote_mode() and not Tts.is_mlx_audio_environment()):
         ask.ask_error(REQUIRES_TTS_MODEL)
         return
     if not state.project.dir_path:

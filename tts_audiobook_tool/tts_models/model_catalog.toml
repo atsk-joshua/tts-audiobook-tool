@@ -622,6 +622,86 @@ project_links = [
 # ------------------------------------------------------------------------
 # SGL-Omni
 # ------------------------------------------------------------------------
+# ------------------------------------------------------------------------
+[[models]]
+id = "fish_drama3_mlxaudio"
+backend_kind = "mlx_audio"
+settings = [
+    { name = "checkpoint", section = "parameters", type = "str", default = "mlx-community/fish-audio-drama-3-4bit" },
+    { name = "reference_mode", section = "parameters", type = "str", default = "selected" },
+]
+
+[models.spec]
+local_module_test = "mlx_audio"
+local_torch_devices = []
+file_tag = "fish_drama3_mlxaudio"
+default_output_sample_rate = 44100
+requires_voice = true
+can_stream = true
+requires_ffmpeg_libs = false
+un_all_caps = false
+requirements_file_name = "requirements-mlx-audio.txt"
+output_filters = []
+substitutions = []
+
+[models.spec.ui]
+proper_name = "Fish Audio Drama 3"
+short_name = "Fish Audio Drama 3"
+voice_path_console = "Enter voice clone audio clip file path: "
+voice_path_requestor = "Select voice clone audio clip"
+project_links = ["https://github.com/Blaizzy/mlx-audio"]
+settings_note = "Runs locally with MLX-Audio. Voice references require their exact transcripts."
+
+[models.mlx_audio]
+family = "fish_drama3"
+checkpoints = [{ repo_id = "mlx-community/fish-audio-drama-3-4bit", revision = "da72954212fc2a0dfbb4f0779308a82ee705c851", label = "4-bit" }]
+
+[models.mlx_audio.parameters]
+temperature = { type = "float", default = 0.7, min = 0.01, max = 2.0 }
+top_p = { type = "float", default = 0.7, min = 0.01, max = 1.0 }
+top_k = { type = "int", default = 30, min = 1, max = 1000 }
+max_tokens = { type = "int", default = 1024, min = 1, max = 16384 }
+
+# ------------------------------------------------------------------------
+[[models]]
+id = "qwen3tts_mlxaudio"
+backend_kind = "mlx_audio"
+settings = [
+    { name = "checkpoint", section = "parameters", type = "str", default = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16" },
+]
+
+[models.spec]
+local_module_test = "mlx_audio"
+local_torch_devices = []
+file_tag = "qwen3tts_mlxaudio"
+default_output_sample_rate = 24000
+requires_voice = true
+can_stream = true
+requires_ffmpeg_libs = false
+un_all_caps = true
+requirements_file_name = "requirements-mlx-audio.txt"
+output_filters = []
+substitutions = []
+
+[models.spec.ui]
+proper_name = "Qwen3-TTS Base"
+short_name = "Qwen3-TTS Base"
+voice_path_console = "Enter voice clone audio clip file path: "
+voice_path_requestor = "Select voice clone audio clip"
+project_links = ["https://github.com/Blaizzy/mlx-audio"]
+settings_note = "Runs locally with MLX-Audio. Voice references require their exact transcripts."
+
+[models.mlx_audio]
+family = "qwen3_tts"
+checkpoints = [{ repo_id = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16", revision = "a6eb4f68e4b056f1215157bb696209bc82a6db48", label = "1.7B Base bf16" }]
+
+[models.mlx_audio.parameters]
+temperature = { type = "float", default = 0.9, min = 0.01, max = 2.0 }
+top_p = { type = "float", default = 1.0, min = 0.01, max = 1.0 }
+top_k = { type = "int", default = 50, min = 1, max = 1000 }
+repetition_penalty = { type = "float", default = 1.05, min = 1.0, max = 2.0 }
+max_tokens = { type = "int", default = 1600, min = 1, max = 16384 }
+
 [[models]]
 id = "auk_sglomni"
 settings = [

@@ -18,6 +18,16 @@ from tts_audiobook_tool.tts_models.tts_model_type import TtsBackendKind, TtsMode
 from tts_audiobook_tool.util import COL_ERROR
 
 
+@pytest.fixture(autouse=True)
+def isolate_optional_system_startup_hints(monkeypatch):
+    # These tests assert model hints; host tkinter availability has its own
+    # startup checks and must not add unrelated hints on Nix Python builds.
+    monkeypatch.setattr(
+        "tts_audiobook_tool.menus.main_menu.app_hint_util.show_shared_startup_hints",
+        lambda *args, **kwargs: None,
+    )
+
+
 def make_state(model: TtsModelType = TtsModelType.require_by_id("none")) -> State:
     state = object.__new__(State)
     state._prefs = Prefs()

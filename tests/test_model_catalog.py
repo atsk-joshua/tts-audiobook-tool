@@ -272,6 +272,7 @@ def test_complete_catalog_order_and_backend_suffix_ids():
         "glm_local", "higgs_v2_local", "indextts2_local", "mira_local",
         "moss_local", "omnivoice_local", "pocket_local", "qwen3tts_local",
         "vibevoice_local",
+        "fish_drama3_mlxaudio", "qwen3tts_mlxaudio",
         # Alphabetize model names, not full IDs: AuK precedes AuK-Flash.
         "auk_sglomni", "auk_flash_sglomni", "cosyvoice3_sglomni",
         "fish_s2_sglomni", "higgs_v3_sglomni", "moss_delay_sglomni",
@@ -287,7 +288,7 @@ def test_complete_catalog_order_and_backend_suffix_ids():
     assert [spec.id for spec in load_catalog()[0]] == expected_ids
     assert [handle.id for handle in TtsModelType.all()] == expected_ids
     assert "backend_kind" not in raw["models"][0]
-    suffixes = {"local": "local", "sgl_omni": "sglomni", "audio_cpp": "audiocpp"}
+    suffixes = {"local": "local", "mlx_audio": "mlxaudio", "sgl_omni": "sglomni", "audio_cpp": "audiocpp"}
     for entry in raw["models"][1:]:
         suffix = suffixes[entry["backend_kind"]]
         assert re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)*_" + suffix, entry["id"])
@@ -302,7 +303,7 @@ def test_catalog_provides_canonical_lookup_handles_in_order():
     assert [spec.id for spec in specs] == ids
     assert list(TtsModelType._initial_specs) == ids
     assert [handle.id for handle in TtsModelType.all()] == ids
-    assert len(specs) == 37
+    assert len(specs) == 39
     assert len(servers) == 23  # nine SGL entries plus the fourteen audio.cpp entries
     assert len(fingerprint) == 64
     for spec in specs:
@@ -452,7 +453,7 @@ def test_installing_data_only_spec_uses_lookup_without_attributes_and_reset_remo
 
 def test_catalog_is_available_at_import_before_model_classes(tmp_path):
     code = """from tts_audiobook_tool.tts_models.model_catalog import load_catalog
-assert len(load_catalog()[0]) == 37
+assert len(load_catalog()[0]) == 39
 from tts_audiobook_tool.tts_models.fish_s2_base_model import FishS2BaseModel
 from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
 assert FishS2BaseModel.INFO is TtsModelType.require_by_id("fish_s2_local").value

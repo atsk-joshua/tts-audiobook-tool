@@ -342,6 +342,44 @@ def parse_audio_cpp_declaration(entry: dict[str, Any], where: str) -> dict[str, 
             "request_options": request_options}
 
 
+def parse_mlx_audio_declaration(entry: dict[str, Any], where: str) -> dict[str, Any]:
+    """Validate the small native backend contract without importing MLX."""
+    group = _object(entry.get("mlx_audio"), f"{where}.mlx_audio", {"family", "checkpoints", "parameters"})
+    family = _field(group, "family", f"{where}.mlx_audio", str)
+    if family not in ("qwen3_tts", "fish_drama3", "omnivoice"):
+        _fail(f"{where}.mlx_audio.family", "unsupported MLX-Audio family")
+    checkpoints = _field(group, "checkpoints", f"{where}.mlx_audio", list)
+    if not checkpoints:
+        _fail(f"{where}.mlx_audio.checkpoints", "expected declared checkpoints")
+    seen = set()
+    for checkpoint in checkpoints:
+        location = f"{where}.mlx_audio.checkpoints"
+        checkpoint = _object(checkpoint, location, {"repo_id", "revision", "label"})
+        for key in ("repo_id", "revision", "label"):
+            if not _field(checkpoint, key, location, str).strip():
+                _fail(f"{location}.{key}", "must not be empty")
+        if not re.fullmatch(r"[0-9a-f]{40}", checkpoint["revision"]):
+            _fail(f"{location}.revision", "expected an immutable 40-character commit")
+        if checkpoint["repo_id"] in seen:
+            _fail(location, "duplicate checkpoint repo_id")
+        seen.add(checkpoint["repo_id"])
+    parameters = _field(group, "parameters", f"{where}.mlx_audio", dict)
+    for name, raw in parameters.items():
+        location = f"{where}.mlx_audio.parameters.{name}"
+        raw = _object(raw, location, {"type", "default", "min", "max"})
+        typ = raw.get("type")
+        if typ not in ("int", "float"):
+            _fail(location, "expected int or float parameter")
+        for key in ("default", "min", "max"):
+            value = raw.get(key)
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or (typ == "int" and not isinstance(value, int)) or not math.isfinite(value)):
+                _fail(f"{location}.{key}", f"expected finite {typ}")
+        if not raw["min"] <= raw["default"] <= raw["max"]:
+            _fail(location, "default must be within bounds")
+    return group
+
+
 def parse_spec(entry: dict[str, Any]) -> TtsModelSpec:
     """Derive one complete spec from its sole declaration in the catalog."""
     id = entry["id"]
@@ -351,7 +389,7 @@ def parse_spec(entry: dict[str, Any]) -> TtsModelSpec:
         _fail(f"{where}.backend_kind", "required for real models")
     backend = entry.get("backend_kind")
     if backend not in (None, *(kind.value for kind in TtsBackendKind)):
-        _fail(f"{where}.backend_kind", "expected local, sgl_omni or audio_cpp (or omitted for none)")
+        _fail(f"{where}.backend_kind", "expected local, mlx_audio, sgl_omni or audio_cpp (or omitted for none)")
     if id == "none" and backend is not None:
         _fail(f"{where}.backend_kind", "the none placeholder cannot have a backend")
     is_server = backend in (TtsBackendKind.SGL_OMNI.value, TtsBackendKind.AUDIO_CPP.value)
@@ -426,7 +464,7 @@ def parse_spec(entry: dict[str, Any]) -> TtsModelSpec:
         streaming = False
         voice_required = declaration["voice_required"]
     else:
-        if id != "none" and backend != TtsBackendKind.LOCAL.value:
+        if id != "none" and backend not in (TtsBackendKind.LOCAL.value, TtsBackendKind.MLX_AUDIO.value):
             _fail(f"{where}.backend_kind", "only the none placeholder can lack a backend")
         if "sgl_omni" in entry or "audio_cpp" in entry:
             _fail(where, "local and placeholder models cannot have server behavior")
@@ -456,6 +494,12 @@ def parse_spec(entry: dict[str, Any]) -> TtsModelSpec:
                 _fail(f"{where}.spec", "the none placeholder cannot have local inference settings")
         elif not module.strip():
             _fail(f"{where}.spec.local_module_test", "local models require a module probe")
+    if backend == TtsBackendKind.MLX_AUDIO.value:
+        parse_mlx_audio_declaration(entry, where)
+        if devices or requires_ffmpeg:
+            _fail(where, "MLX-Audio does not use Torch devices or FFmpeg shared libraries")
+    elif "mlx_audio" in entry:
+        _fail(where, "only MLX-Audio models may declare mlx_audio behavior")
     return TtsModelSpec(id, TtsBackendKind(backend) if backend else None,
                         module, devices, file_tag, rate, voice_required, streaming,
                         requires_ffmpeg, caps, requirements, ui, filters,
@@ -478,7 +522,7 @@ def _load_catalog(path: Path) -> tuple[dict[str, Any], list[TtsModelSpec], list[
     servers: list[dict[str, Any]] = []
     ids: set[str] = set()
     for index, entry in enumerate(entries):
-        item = _object(entry, f"models[{index}]", {"id", "backend_kind", "spec", "sgl_omni", "audio_cpp", "settings"})
+        item = _object(entry, f"models[{index}]", {"id", "backend_kind", "spec", "sgl_omni", "audio_cpp", "mlx_audio", "settings"})
         id = _field(item, "id", f"models[{index}]", str)
         if not id or not re.fullmatch(r"[a-z][a-z0-9_]*", id) or id in ids:
             _fail(f"models[{index}].id", "expected a unique, lowercase model ID")

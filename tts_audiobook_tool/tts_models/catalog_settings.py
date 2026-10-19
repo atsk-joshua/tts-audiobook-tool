@@ -36,7 +36,7 @@ def parse_model_settings(entry: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     """
     settings: dict[str, dict[str, Any]] = {}
     backend = entry.get("backend_kind")
-    if backend in ("sgl_omni", "audio_cpp"):
+    if backend in ("sgl_omni", "audio_cpp", "mlx_audio"):
         group = entry[backend]
         parameters = group.get("parameters", {})
         if not isinstance(parameters, dict):
@@ -54,10 +54,10 @@ def parse_model_settings(entry: dict[str, Any]) -> tuple[dict[str, Any], ...]:
         settings["file_name"] = {"name": "file_name", "section": "voice_references", "type": "list[str]", "default": []}
         behavior = group.get("behavior", {})
         transcript = (behavior.get("transcript") != "omitted" if backend == "sgl_omni"
-                      else group.get("reference_transcript", False))
+                      else (True if backend == "mlx_audio" else group.get("reference_transcript", False)))
         if transcript:
             settings["transcript"] = {"name": "transcript", "section": "voice_references", "type": "list[str]", "default": []}
-        if backend == "audio_cpp" or behavior.get("seed") == "resolved":
+        if backend in ("audio_cpp", "mlx_audio") or behavior.get("seed") == "resolved":
             settings["seed"] = {"name": "seed", "section": "parameters", "type": "int", "default": -1, "preserve_default": True}
         orchestration = behavior.get("orchestration", "")
         if orchestration:
@@ -95,7 +95,7 @@ def parse_model_settings(entry: dict[str, Any]) -> tuple[dict[str, Any], ...]:
         voice = settings.get("file_name")
         if voice is None or voice.get("group", "") != settings["transcript"].get("group", ""):
             _fail(f"model {entry['id']}.settings.transcript", "must share the file_name storage owner")
-    if backend in ("sgl_omni", "audio_cpp"):
+    if backend in ("sgl_omni", "audio_cpp", "mlx_audio"):
         for name, param in entry[backend].get("parameters", {}).items():
             storage = settings[name]
             where = f"model {entry['id']}.settings.{name}"

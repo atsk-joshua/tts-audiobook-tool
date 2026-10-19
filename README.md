@@ -10,7 +10,16 @@
 
 `tts-audiobook-tool` is an audiobook creation tool focused on high-quality output, supporting a growing list of text-to-speech models.
 
-Audio generation is performed locally (via dedicated virtual environments) or through a remote server: [SGL-Omni](https://github.com/sgl-project/sglang-omni) or [audio.cpp](https://github.com/0xShug0/audio.cpp).
+Audio generation supports model-specific Native Local environments, **Local (MLX-Audio)** on Apple Silicon, and remote [SGL-Omni](https://github.com/sgl-project/sglang-omni) or [audio.cpp](https://github.com/0xShug0/audio.cpp) servers.
+
+**Local (MLX-Audio)** runs Qwen3-TTS Base and Fish Audio Drama 3 in the existing
+model worker, using one environment and no inference server. It requires Apple
+Silicon and Python 3.12. The dependency metadata permits macOS 14 or newer;
+macOS 26 has been tested, while older releases remain unverified. Run
+`./setup-mlx-audio.sh`, then
+`./venv-mlx-audio/bin/python -m tts_audiobook_tool` and choose a family under
+**Model settings > TTS model**. Existing projects keep their saved model selection;
+changing environments does not migrate them.
 
 | TTS model | Local | SGL-Omni | audio.cpp |
 | --- | :---: | :---: | :---: |

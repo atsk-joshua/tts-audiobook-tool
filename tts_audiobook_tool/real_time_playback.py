@@ -162,8 +162,9 @@ def _start_impl(
     stream = None
     consecutive_model_errors = 0
     max_consecutive_model_errors = 5
-    # The first gen of the run may be dominated by model warm-up or download
-    # time, so it alone is exempt from the watchdog. SGL-Omni uses a more
+    # Legacy/remote runs exempt their first generation for lazy warm-up or
+    # download. Local MLX was explicitly warmed above, so its first prompt is
+    # armed too. SGL-Omni uses a more
     # generous outer deadline as a last-resort client-worker backstop.
     gen_timeout_tracker = make_backend_gen_timeout_tracker()
 
@@ -513,9 +514,10 @@ def generate_full_flow(
 
     Params:
         gen_timeout_tracker:
-            The run-shared GEN_TIMEOUT tracker; the run's very first gen is
-            exempt from the watchdog (warm-up/download). When None, a fresh
-            tracker is used (this call's first attempt is the exempt one).
+            The run-shared GEN_TIMEOUT tracker. Legacy/remote runs exempt the
+            first step for warm-up/download; explicitly warmed local MLX runs
+            arm the first prompt too. When None, create a fresh tracker using
+            that same backend policy.
     """
 
     if gen_timeout_tracker is None:

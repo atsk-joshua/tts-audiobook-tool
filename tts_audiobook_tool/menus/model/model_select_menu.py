@@ -1,4 +1,4 @@
-"""Remote-mode TTS model picker, shown at the top of the Model settings menu."""
+"""Shared TTS model picker for remote clients and compatible local stacks."""
 import ntpath
 
 from tts_audiobook_tool import ask
@@ -58,11 +58,13 @@ class ModelSelectMenu:
         models = [TtsModelType.require_by_id("none")] + sorted(
             dict.fromkeys(available), key=lambda model: model.value.ui["proper_name"].casefold(),
         )
-        snapshot = RemoteTtsDiscovery.get_snapshot()
+        snapshot = (RemoteTtsDiscovery.get_snapshot() if any(
+            model.value.backend_kind in (TtsBackendKind.AUDIO_CPP, TtsBackendKind.SGL_OMNI)
+            for model in available) else None)
 
         def make_label(model: TtsModelType) -> str:
             label = model.value.ui["proper_name"]
-            if (snapshot.backend_kind is not TtsBackendKind.AUDIO_CPP
+            if (snapshot is None or snapshot.backend_kind is not TtsBackendKind.AUDIO_CPP
                     or model.value.backend_kind is not TtsBackendKind.AUDIO_CPP):
                 return label
             server_ids = [server_id for candidate, server_id in snapshot.candidates if candidate == model]

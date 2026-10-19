@@ -183,6 +183,7 @@ class MenuStatus:
 # Display label per backend kind, matching the status block's "TTS model" line.
 _BACKEND_KIND_LABELS: dict[TtsBackendKind | None, str] = {
     TtsBackendKind.LOCAL: "local",
+    TtsBackendKind.MLX_AUDIO: "Local (MLX-Audio)",
     TtsBackendKind.SGL_OMNI: "SGL-Omni",
     TtsBackendKind.AUDIO_CPP: "audio.cpp",
 }
@@ -217,7 +218,10 @@ def _make_local_tts_text(
     text = Tts.get_model_support(state.project).get_menu_text(state.project, None)
     if text == NONE_MODEL_NAME:
         text = COL_ERROR + text
-    text += f" {QUALIFIER_COLOR}(local)"
+    selected = state.project.get_tts_model_type()
+    is_mlx = selected.value.backend_kind is TtsBackendKind.MLX_AUDIO or Tts.is_mlx_audio_environment()
+    label = "Local (MLX-Audio)" if is_mlx else "local"
+    text += f" {QUALIFIER_COLOR}({label})"
 
     extras = []
     tts_loaded = bool(
@@ -228,7 +232,7 @@ def _make_local_tts_text(
         extras.append(worker_models.tts_device)
     if tts_loaded:
         extras.append("loaded")
-    if not tts_loaded and state.prefs.tts_force_cpu:
+    if not tts_loaded and state.prefs.tts_force_cpu and not is_mlx:
         # Note, showing "force cpu" qualifier only if no instance exists
         extras.append("will force cpu")
 

@@ -12,6 +12,13 @@ from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
 
 
 @pytest.fixture(autouse=True)
+def isolate_model_runtime_role(monkeypatch):
+    """Startup/UI tests must not leave the next test in interactive-main mode."""
+    from tts_audiobook_tool import model_runtime
+    monkeypatch.setattr(model_runtime, "_role", model_runtime.ModelRuntimeRole.STANDALONE)
+
+
+@pytest.fixture(autouse=True)
 def stop_project_directory_watchers(monkeypatch):
     """Release each test's project observers instead of exhausting inotify."""
     from tts_audiobook_tool.project_support.project_sound_segments import ProjectSoundSegments
@@ -137,6 +144,7 @@ def initialize_tts_type_for_tests():
         "_selected_server_model_id": "",
         "_available_local_models": (),
         "_model_params": {},
+        "_mlx_audio": None,
     }
     original_binding_fields = {name: getattr(Tts, name) for name in binding_fields}
     for name, value in binding_fields.items():

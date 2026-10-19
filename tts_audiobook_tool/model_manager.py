@@ -9,6 +9,7 @@ from tts_audiobook_tool.state import State
 from tts_audiobook_tool.stt import Stt
 from tts_audiobook_tool.tts import Tts
 from tts_audiobook_tool.tts_models.audio_cpp_configured import AudioCppBackendAdapter
+from tts_audiobook_tool.tts_models.model_spec import TtsBackendKind
 from tts_audiobook_tool.util import *
 
 
@@ -71,6 +72,8 @@ class ModelManager:
             GenerationEvents.emit(GenerationPhase("Loading text-to-speech model"))
         try:
             tts_instance = Tts.get_instance()
+            if Tts.get_active_type().value.backend_kind is TtsBackendKind.MLX_AUDIO:
+                tts_instance.prepare_for_project(state.project)
         except Exception as e:
             Interrupts().clear()
             app_memory.gc_ram_vram()

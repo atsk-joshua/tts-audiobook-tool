@@ -185,10 +185,10 @@ class Start:
                 printt(f"{COL_ERROR}torch.cuda.is_available() returned False. Exiting.")
                 exit(1)
 
-        if num_matches > 1:
+        if num_matches > 1 and not Tts.has_compatible_local_models():
             error = "\nMore than one of the supported TTS models' core libraries is currently installed.\n"
-            error += "This is not recommended. Please re-install your virtual environment, \n"
-            error += "following the instructions in the project's README."
+            error += "Keep MLX-Audio in its own venv-mlx-audio; legacy stacks need separate environments.\n"
+            error += "See the project README for setup instructions."
             printt(COL_ERROR + error)
             exit(1)
 

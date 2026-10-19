@@ -17,7 +17,14 @@ The process/UI boundary, worker ownership rules, cancellation behavior, and proc
 
 ## Virtual Environments and Requirements Files
 
-Every local model has a dedicated `requirements-<model>.txt` at the project root:
+Native MLX-Audio uses one `requirements-mlx-audio.txt` with pinned direct
+dependencies for Qwen3-TTS Base and Fish Audio Drama 3. It has a distinct
+`MLX_AUDIO` backend identity and uses the normal local worker. Lightweight family-bound base classes expose
+metadata; `mlx_audio_runtime.py` shares loading, references, audio assembly and
+cleanup, with explicit small family policies. Model weights remain worker-owned;
+UI discovery does not import inference libraries.
+
+Every legacy local model has a dedicated `requirements-<model>.txt` at the project root:
 
 ```
 requirements-base.txt       # app-only deps; the canonical app dependencies block

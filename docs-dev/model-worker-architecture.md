@@ -17,6 +17,14 @@ Primary files:
 
 Related: [tts-model-architecture.md](tts-model-architecture.md) (model and venv layering), [sound-segment-and-regen-architecture.md](sound-segment-and-regen-architecture.md) (the on-disk artifacts the worker produces).
 
+Native MLX-Audio follows these same ownership rules. Startup only discovers
+package capabilities. A family runtime wrapper can exist without weights;
+its `is_loaded` property controls worker residency/status and preview watchdog
+grace. `prepare_for_project()` loads the selected pinned checkpoint during
+explicit warmup and before preview inference enters the watchdog. Cancellation
+is checked at upstream generator yields; hard reset remains recovery for a
+blocked native call. No additional inference service or worker is involved.
+
 ## Why the worker exists
 
 Before the worker (everything up to and including `e46ad10`, 2026-08-22) one process did it all: menus, editors, TTS, STT, YAMNet, LavaSR, and the PortAudio playback stream. That is simple, and it kept the inference code trivially synchronous. The app paid for the simplicity in ways that could not be fixed inside one process:
@@ -153,7 +161,7 @@ These bindings apply to generation, realtime playback, and the quick-generation 
 
 The hard-reset action runs on a Textual thread worker so process termination never blocks rendering.
 
-The watchdog covers the case cooperation cannot: a call that never returns. `gen_timeout_util.py` runs `GenTimeoutTracker` on a helper thread inside the worker, because the inference loops run in the worker and a call that never returns would block detection on the calling thread. When it fires it emits `GenerationTimedOut` through the contextvar sink; the session turns that into a hard reset. The first generation step of a run is exempt because it may carry model load or a download. The TTS preview has no "later step", so `_should_watch_preview_inference()` decides per call and `backend_gen_timeout_scope()` supplies an always-armed scope: the first preview of a worker process and any preview whose model is not resident run unwatched; every other preview runs armed. STT has its own story — a parent-side `timeout_seconds` plus a stack dump to `STT_WORKER_STACK_LOG_PATH` after `STT_DIAGNOSTIC_THRESHOLD_SECONDS`, and a chunk-level retry budget in `enhance/enhance_alignment.py`.
+The watchdog covers the case cooperation cannot: a call that never returns. `gen_timeout_util.py` runs `GenTimeoutTracker` on a helper thread inside the worker, because the inference loops run in the worker and a call that never returns would block detection on the calling thread. When it fires it emits `GenerationTimedOut` through the contextvar sink; the session turns that into a hard reset. Legacy and remote runs exempt the first generation step because it may carry model load or a download. The TTS preview has no "later step", so `_should_watch_preview_inference()` decides per call and `backend_gen_timeout_scope()` supplies an always-armed scope: the first legacy/remote preview of a worker process and any preview whose model is not resident run unwatched; every other preview runs armed. Native MLX explicitly preloads weights before generation or preview, then watches synthesis from the first prompt. STT has its own story — a parent-side `timeout_seconds` plus a stack dump to `STT_WORKER_STACK_LOG_PATH` after `STT_DIAGNOSTIC_THRESHOLD_SECONDS`, and a chunk-level retry budget in `enhance/enhance_alignment.py`.
 
 Every reset carries an explicit `HardResetCause` (`USER_ESCALATION`, `GENERATION_TIMEOUT`, `MODEL_UNHEALTHY`, `INTERFACE_FAILURE`) so alert and policy behavior derives from the cause rather than from message text. Trigger text says a reset is *required*, never that it succeeded; the terminal summary appends any replacement-startup error from `ModelWorker.reset()`.
 

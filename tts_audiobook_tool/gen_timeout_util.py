@@ -23,11 +23,12 @@ The watchdog deliberately takes no notice of interrupt/cancel state: a
 pending cancellation is only observable at loop boundaries, between calls,
 so an in-flight inference stays armed until it finishes or times out.
 
-The very first inference of a run is exempt (``GenTimeoutTracker``): it may
-legitimately spend far longer than the cap on first-run model warm-up, lazy
-loading, or a model download. Single-shot callers (the diagnostic TTS preview)
-use the always-armed ``backend_gen_timeout_scope()`` instead and decide that
-exemption for themselves.
+Legacy local and remote runs exempt their first inference
+(``GenTimeoutTracker``), since model warm-up, lazy loading, or a download may
+dominate that step. Local MLX runs explicitly warm their weights before the
+generation loop and arm the watchdog from the first prompt. Single-shot
+callers (the diagnostic TTS preview) use the always-armed
+``backend_gen_timeout_scope()`` and decide any setup exemption themselves.
 """
 
 from __future__ import annotations
@@ -114,13 +115,13 @@ def gen_timeout_scope(
 
 
 class GenTimeoutTracker:
-    """Applies the GEN_TIMEOUT watchdog to every generation step except the
-    first one.
+    """Applies the GEN_TIMEOUT watchdog with an optional first-step exemption.
 
     The first inference of a run may legitimately take far longer than
     ``GEN_TIMEOUT``: first-run model warm-up, lazy loading, or even a model
-    download. A fresh tracker exempts its first ``scope()`` from timing out;
-    every later scope is armed.
+    download. By default a fresh tracker exempts its first ``scope()``;
+    ``exempt_first=False`` arms every scope. The backend factory uses this
+    option for local MLX because its weights are explicitly warmed first.
 
     One tracker belongs to one generation run (its lifetime defines which
     step is "first"), so a run with retries shares it across all of them.
@@ -131,13 +132,15 @@ class GenTimeoutTracker:
         timeout_seconds: float | None = None,
         *,
         is_remote: bool = False,
+        exempt_first: bool = True,
     ) -> None:
-        self._did_first_gen = False
+        self._did_first_gen = not exempt_first
         self._timeout_seconds = timeout_seconds
         self._is_remote = is_remote
 
     @contextmanager
     def scope(self, timeout_seconds: float | None = None) -> Iterator[GenTimeoutGuard]:
+        """Watch this step unless the tracker still owes a setup exemption."""
         if not self._did_first_gen:
             # First gen of the run: untimed (warm-up/download may dominate).
             self._did_first_gen = True
@@ -172,10 +175,17 @@ def get_backend_gen_timeout() -> tuple[float, bool]:
 
 def make_backend_gen_timeout_tracker() -> GenTimeoutTracker:
     """Create a tracker with the current backend's timeout policy."""
+    from tts_audiobook_tool.tts import Tts
+    from tts_audiobook_tool.tts_models.model_spec import TtsBackendKind
+
     timeout_seconds, is_remote = get_backend_gen_timeout()
     return GenTimeoutTracker(
         timeout_seconds=timeout_seconds,
         is_remote=is_remote,
+        # Native MLX weights are explicitly warmed under the initialization
+        # timeout before a generation run. Its first long prompt needs the same
+        # watchdog as later prompts, including when cancellation is pending.
+        exempt_first=is_remote or Tts.get_active_type().value.backend_kind is not TtsBackendKind.MLX_AUDIO,
     )
 
 
@@ -184,9 +194,10 @@ def backend_gen_timeout_scope() -> Iterator[GenTimeoutGuard]:
     """
     Watch one *single-shot* generation step for GEN_TIMEOUT.
 
-    A ``GenTimeoutTracker`` exempts the first step of a run, because that step
-    may legitimately carry first-run model warm-up, lazy loading, or a
-    download. Callers that make exactly one inference per call (the diagnostic
+    A ``GenTimeoutTracker`` may exempt the first step of a legacy or remote
+    run when it carries model warm-up, lazy loading, or a download. Local MLX
+    trackers arm their first prompt after explicit warm-up. Callers that make
+    exactly one inference per call (the diagnostic
     TTS preview) have no "later step" to fall back on, so this scope is always
     armed; those callers decide the exemption themselves, from what they know
     about whether the upcoming call can still include model setup.

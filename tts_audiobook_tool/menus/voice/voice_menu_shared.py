@@ -83,6 +83,11 @@ class VoiceMenuShared:
         """
         Simply delegates to the correct model-specific voice menu
         """
+        from tts_audiobook_tool.tts_models.mlx_audio_definition import get_mlx_audio_definition
+        if get_mlx_audio_definition(state.project.get_tts_model_type().id) is not None:
+            from tts_audiobook_tool.menus.voice.voice_mlx_audio_menu import VoiceMlxAudioMenu
+            VoiceMlxAudioMenu.menu(state)
+            return
         audio_definition = Tts.get_audio_cpp_definition(state.project.get_tts_model_type())
         if audio_definition is not None:
             from tts_audiobook_tool.menus.voice.voice_audio_cpp_menu import VoiceAudioCppMenu
@@ -149,6 +154,11 @@ class VoiceMenuShared:
         factory itself. An unselected/unknown model offers no stale controls.
         """
         model_type = state.project.get_tts_model_type()
+        from tts_audiobook_tool.tts_models.mlx_audio_definition import get_mlx_audio_definition
+        mlx_definition = get_mlx_audio_definition(model_type.id)
+        if mlx_definition is not None:
+            from tts_audiobook_tool.menus.voice.voice_mlx_audio_menu import VoiceMlxAudioMenu
+            return VoiceMlxAudioMenu.make_items(state, mlx_definition)
         audio_definition = Tts.get_audio_cpp_definition(model_type)
         if audio_definition is not None:
             from tts_audiobook_tool.menus.voice.voice_audio_cpp_menu import VoiceAudioCppMenu

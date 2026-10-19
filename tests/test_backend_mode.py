@@ -236,7 +236,9 @@ def test_catalog_helpers_classify_by_backend_kind():
                            TtsModelType.require_by_id("moss_delay_audiocpp"),
                            TtsModelType.require_by_id("moss_local_audiocpp"),
                            TtsModelType.require_by_id("omnivoice_audiocpp")]
-    assert set(local_items) | set(sgl_items) | set(audio_items) == set(TtsModelType) - {TtsModelType.require_by_id("none")}
+    mlx_items = TtsModelType.get_items_by_backend(TtsBackendKind.MLX_AUDIO)
+    assert {model.id for model in mlx_items} == {'qwen3tts_mlxaudio', 'fish_drama3_mlxaudio'}
+    assert set(local_items) | set(mlx_items) | set(sgl_items) | set(audio_items) == set(TtsModelType) - {TtsModelType.require_by_id("none")}
     assert all(item.value.backend_kind == TtsBackendKind.LOCAL for item in local_items)
     assert all(item.value.backend_kind == TtsBackendKind.SGL_OMNI for item in sgl_items)
     assert TtsModelType.require_by_id("none").value.backend_kind is None

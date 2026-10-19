@@ -10,7 +10,7 @@ This is the canonical reference for choosing `Project.tts_model_type`, reconcili
 - **Active runtime:** the model successfully bound for generation. It can be the `"none"` placeholder even while the project retains a real model ID.
 - **Exact server entry:** the server's inference model ID, resolved at binding time. It is ephemeral, not the value stored in `Project.tts_model_type`.
 
-A model's backend kind (`LOCAL`, `SGL_OMNI`, or `AUDIO_CPP`) is not another process mode. A server-mode process can discover either supported server backend without becoming a local-mode process.
+A model's backend kind (`LOCAL`, `MLX_AUDIO`, `SGL_OMNI`, or `AUDIO_CPP`) is not another process mode. Both native backends use local worker execution. A server-mode process can discover either supported server backend without becoming a local-mode process.
 
 Every shipped entry in [`model_catalog.toml`](<../tts_audiobook_tool/tts_models/model_catalog.toml>) receives a canonical `TtsModelType` handle in exact TOML order, including data-only entries. Lookup uses the stable catalog ID directly; there are no model-named class attributes, Python ID constants, or separate declaration inventory. Catalog IDs remain distinct from server inference IDs.
 
@@ -19,7 +19,7 @@ Every shipped entry in [`model_catalog.toml`](<../tts_audiobook_tool/tts_models/
 
 Both lookups return the same object for a known ID and do not discover or load models. Metadata overlays retain that handle and update its `.value` spec. For simple classification compare `.id` to a literal (for example `model.id == "none"`); structural dispatch uses `match model.id` with literal string cases.
 
-Canonical shipped real-model IDs use `<modelname>_<backend>`: `_local`, `_sglomni`, or `_audiocpp`; backend values remain `local`, `sgl_omni`, and `audio_cpp`. The `none` placeholder comes first, then local, SGL-Omni, and audio.cpp entries, alphabetically by model name within each backend (AuK before AuK-Flash). Storage group names, file tags, upstream names, and legacy project field prefixes are independent of these IDs. The pre-release ID rename requires no migration for undeployed IDs; existing v1/v2 flat-field migration produces the current canonical owners.
+Canonical shipped real-model IDs use `<modelname>_<backend>`: `_local`, `_mlxaudio`, `_sglomni`, or `_audiocpp`; backend values are `local`, `mlx_audio`, `sgl_omni`, and `audio_cpp`. The `none` placeholder comes first, then Native Local, MLX-Audio, SGL-Omni, and audio.cpp entries, alphabetically within each backend. Storage group names, file tags, upstream names, and legacy project field prefixes are independent of these IDs. Existing v1/v2 flat-field migration produces the canonical legacy owners; MLX IDs are new, independent selections.
 
 ## 1. Determine process mode and availability
 
@@ -32,13 +32,23 @@ New installs use [`requirements-remote.txt`](<../requirements-remote.txt>) and [
 
 Opening another project, changing the selected model, changing the server URL, and losing server connectivity do not change process mode. Changing modes requires relaunching in the appropriate environment.
 
-Local mode supports at most one installed supported model library. Multiple local libraries are an environment error, rejected at startup; the multiple-model selection rule below applies to remote availability, not a new local multi-model feature.
+Legacy local environments support one installed model stack. A dedicated
+`venv-mlx-audio` exposes several MLX families through one installed package and
+the same local worker. MLX plus a legacy stack, or multiple legacy stacks,
+remain environment errors. Discovery imports no MLX code or weights.
 
 Remote availability is a deduplicated list of catalog types, not a count of server entries. Discovery errors produce an empty available-model list. Normal checks reuse discovery TTL/backoff; opening **Model settings > TTS model** explicitly refreshes discovery. In server mode, entering **Options** also forces discovery before the heading, status, and controls render, bypassing TTL/backoff. This happens once per entry, not on ordinary redraws; the manual refresh action remains available.
 
 ## 2. Reconcile the project selection
 
 Before building interactive menu items and when printing the status block, compare the raw saved ID with available model IDs:
+
+**MLX-Audio environment exception:** preserve every non-`none` saved selection,
+including unknown or unavailable IDs. A valid selection remains active; an
+unavailable selection blocks inference and stays repairable through the picker.
+Never silently migrate a legacy Qwen or Drama selection. An initially unselected
+multi-family project remains `none` until the user chooses a model. The table
+below otherwise retains the legacy local/server reconciliation rules.
 
 | Available distinct types | Saved selection | Action |
 | --- | --- | --- |

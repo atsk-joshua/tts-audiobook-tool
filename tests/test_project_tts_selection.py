@@ -27,6 +27,9 @@ def metadata_catalog(monkeypatch):
     catalog = (dict(TtsModelType._catalog), dict(TtsModelType._specs))
     monkeypatch.setattr(Tts, "_probe_backend_mode", staticmethod(lambda: TtsRuntimeMode.LOCAL))
     Tts.init_local_model_type()
+    # Individual tests supply deterministic capabilities independently of the
+    # active developer environment's installed native stack.
+    Tts._available_local_models = ()
     try:
         yield
     finally:
@@ -255,5 +258,8 @@ def test_reconcile_project_model_only_queries_and_changes_project_selection(monk
 def test_startup_checks_duplicate_local_libraries_before_success(monkeypatch):
     from tts_audiobook_tool.start import Start
     monkeypatch.setattr(Tts, "init_local_model_type", staticmethod(lambda: (TtsModelType.require_by_id("vibevoice_local"), 2)))
+    monkeypatch.setattr(Tts, "_available_local_models", (
+        TtsModelType.require_by_id("vibevoice_local"), TtsModelType.require_by_id("chatterbox_local"),
+    ))
     with pytest.raises(SystemExit):
         object.__new__(Start).init_tts_or_exit(is_server=True)

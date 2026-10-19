@@ -79,13 +79,18 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from tts_audiobook_tool.launcher_marker import REMOTE_CLIENT_MARKER_MODULES
 from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
+from tts_audiobook_tool.tts_models.model_spec import TtsBackendKind
 
 # Build the list of (module_test, proper_name) from the catalog, skipping none.
 QUALIFIED_MODELS: list[tuple[str, str]] = []
 for member in TtsModelType.all():
     if member.id == "none":
         continue
-    QUALIFIED_MODELS.append((member.value.local_module_test, member.value.ui["proper_name"]))
+    display = ("Local (MLX-Audio)" if member.value.backend_kind is TtsBackendKind.MLX_AUDIO
+               else member.value.ui["proper_name"])
+    probe = (member.value.local_module_test, display)
+    if probe not in QUALIFIED_MODELS:
+        QUALIFIED_MODELS.append(probe)
 
 REMOTE_CLIENT_DISPLAY_MODEL = "Remote TTS client (SGL-Omni / audio.cpp)"
 
@@ -116,7 +121,8 @@ def probe_venv(venv_path: str) -> tuple[list[str], int]:
     Inside *venv_path*, run a subprocess that checks each module_test.
 
     Returns (list_of_proper_names, match_count) where match_count is the
-    number of matched models.  If match_count > 1 the venv is ambiguous
+    number of matched local stacks. MLX families share one probe.
+    If match_count > 1 the venv is ambiguous
     and should not be used.
     """
     python_exe = get_venv_python(venv_path)
@@ -197,9 +203,8 @@ def has_remote_client_marker(venv_path: str) -> bool:
 def build_venv_list(base_dir: str) -> list[tuple[str, str, list[str]]]:
     """
     Returns list of (venv_path, display_name, detected_models).
-    Only includes venvs that have exactly one detected model, mirroring tts.py's
-    init_model_type assertion that exactly 0 or 1 model should match.
-    Ambiguous venvs (>1 match) are printed as warnings and skipped.
+    Includes venvs with one compatible local stack (all MLX families share one
+    probe), or a remote-client marker. Conflicting stacks are skipped.
     """
     results: list[tuple[str, str, list[str]]] = []
     for vp in find_venvs(base_dir):

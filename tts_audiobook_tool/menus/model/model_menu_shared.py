@@ -14,6 +14,7 @@ from tts_audiobook_tool.state import State
 from tts_audiobook_tool.tts import Tts
 from tts_audiobook_tool.tts_models.model_catalog import ParameterChoice
 from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
+from tts_audiobook_tool.tts_models.model_spec import TtsBackendKind
 from tts_audiobook_tool.util import *
 
 
@@ -39,11 +40,12 @@ class ModelMenuShared:
         selected model's controls, including when no model is selected yet.
         """
         model_type = state.project.get_tts_model_type()
-        if (Tts.is_remote_mode()
+        if (Tts.is_remote_mode() or Tts.is_mlx_audio_environment()
+                or model_type.value.backend_kind is TtsBackendKind.MLX_AUDIO
                 or Tts.get_audio_cpp_definition(model_type) is not None
                 or Tts.get_configured_definition(model_type) is not None):
             initial_hotkey = ""
-            if Tts.is_remote_mode():
+            if Tts.is_remote_mode() or Tts.is_mlx_audio_environment():
                 from tts_audiobook_tool.menus.model.model_select_menu import ModelSelectMenu
                 if ModelSelectMenu.is_selection_required(state):
                     # Nothing else to do here until a model is chosen, so go
@@ -124,13 +126,18 @@ class ModelMenuShared:
         stale controls. In remote mode, the TTS model picker comes first.
         """
         items: list[MenuItem] = []
-        if Tts.is_remote_mode():
+        if Tts.is_remote_mode() or Tts.is_mlx_audio_environment():
             from tts_audiobook_tool.menus.model.model_select_menu import ModelSelectMenu
             items.append(ModelSelectMenu.make_item(state))
         model_type = state.project.get_tts_model_type()
         audio_definition = Tts.get_audio_cpp_definition(model_type)
         definition = Tts.get_configured_definition(model_type)
-        if audio_definition is not None:
+        from tts_audiobook_tool.tts_models.mlx_audio_definition import get_mlx_audio_definition
+        mlx_definition = get_mlx_audio_definition(model_type.id)
+        if mlx_definition is not None:
+            from tts_audiobook_tool.menus.model.model_mlx_audio_menu import ModelMlxAudioMenu
+            settings = ModelMlxAudioMenu.make_items(state, mlx_definition)
+        elif audio_definition is not None:
             from tts_audiobook_tool.menus.model.model_audio_cpp_menu import ModelAudioCppMenu
             settings = ModelAudioCppMenu.make_items(state, audio_definition)
         elif definition is not None:

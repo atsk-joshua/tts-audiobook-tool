@@ -1,0 +1,44 @@
+# Apple Silicon macOS; use Python 3.12. Direct dependencies are pinned.
+# MLX-Audio dependencies
+mlx-audio[tts] @ git+https://github.com/Blaizzy/mlx-audio.git@4ef6c3a577ade12d946e4b1d1870e4ba67fb5b9a
+mlx==0.32.4
+transformers==5.20.1
+
+# App dependencies
+faster-whisper==1.2.1; sys_platform != 'darwin' or platform_machine != 'arm64'
+ctranslate2==4.7.1; sys_platform != 'darwin' or platform_machine != 'arm64'
+mlx-whisper==0.4.3; sys_platform == 'darwin' and platform_machine == 'arm64'
+git+https://github.com/ysharma3501/LavaSR.git@33ac040892519c1bb4aed7eb32e79af51cc29e2a
+vocos @ git+https://github.com/langtech-bsc/vocos.git@451e522f7a11c3652c9522f63ea6780736d93de0
+
+torch==2.8.0
+torchaudio==2.8.0
+
+audiotsm==0.1.2
+chardet==5.2.0
+beautifulsoup4==4.12.3
+EbookLib==0.18
+ffmpeg-python==0.2.0
+httpx==0.28.1
+librosa==0.11.0
+loguru==0.7.3
+metaphone==0.6
+mutagen==1.48.1
+natsort==8.4.0
+num2words==0.5.14
+nvidia-ml-py==13.615.71
+psutil==7.2.2
+pydantic==2.14.1
+pyloudnorm==0.1.1
+pysbd==0.3.4
+pywin32; sys_platform == 'win32'
+requests==2.34.2
+sounddevice==0.5.6
+soundfile==0.14.0
+textual==8.2.8
+prompt-toolkit==3.0.52
+wakepy==1.0.0
+watchdog==6.0.0
+whisper_normalizer==0.1.12
+text2num==3.0.1
+xxhash==3.5.0

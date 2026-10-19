@@ -1096,6 +1096,65 @@ def test_run_tts_preview_reports_a_watchdog_timeout(monkeypatch, capsys) -> None
     assert "GEN_TIMEOUT" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("previous_previews", [0, 3])
+def test_mlx_preview_watches_inference_after_cold_load(monkeypatch, previous_previews) -> None:
+    from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
+
+    _install_preview_state(monkeypatch)
+    monkeypatch.setattr(Tts, "_type", TtsModelType.require_by_id("qwen3tts_mlxaudio"))
+    monkeypatch.setattr(Tts, "is_remote_mode", lambda: False)
+    monkeypatch.setattr(model_worker_module, "_preview_inferences_this_process", previous_previews)
+    instance = SimpleNamespace(is_loaded=False)
+
+    def load(_project):
+        # Setup remains outside the short inference watchdog.
+        time.sleep(.06)
+        instance.is_loaded = True
+
+    instance.prepare_for_project = load
+    monkeypatch.setattr(Tts, "get_instance", lambda: instance)
+    monkeypatch.setattr(Tts, "get_instance_if_exists", lambda: instance)
+    monkeypatch.setattr(gen_timeout_util, "GEN_TIMEOUT", .02)
+
+    def generate(*_args, **_kwargs):
+        time.sleep(.06)
+        return [Sound(np.zeros(8, dtype=np.float32), 24_000)]
+
+    monkeypatch.setattr(SoundPipeline, "generate_processed_using_project", generate)
+    events = _PreviewEventQueue()
+    model_worker_module._run_tts_preview_command(
+        _make_preview_command(), events, _PreviewCancellationEvent()
+    )
+    assert [event for event in events.events if isinstance(event, GenerationUpdate)] == [
+        GenerationUpdate("preview-job", GenerationTimedOut(.02))
+    ]
+    assert events.events[-1].status is GenerationTerminalStatus.FAILED
+
+
+def test_mlx_preview_cancelled_during_load_reports_cancellation(monkeypatch, capsys) -> None:
+    from tts_audiobook_tool.tts_models.tts_model_type import TtsModelType
+
+    _install_preview_state(monkeypatch)
+    monkeypatch.setattr(Tts, "_type", TtsModelType.require_by_id("qwen3tts_mlxaudio"))
+    cancellation = SimpleNamespace(cancelled=False)
+    cancellation.is_set = lambda: cancellation.cancelled
+
+    def load(_project):
+        cancellation.cancelled = True
+        raise RuntimeError("Generation interrupted")
+
+    monkeypatch.setattr(Tts, "get_instance", lambda: SimpleNamespace(prepare_for_project=load))
+    monkeypatch.setattr(model_worker_module, "_should_watch_preview_inference", lambda: False)
+    monkeypatch.setattr(SoundPipeline, "generate_processed_using_project",
+                        lambda *_args, **_kwargs: pytest.fail("Cancelled load must not synthesize"))
+    events = _PreviewEventQueue()
+    model_worker_module._run_tts_preview_command(_make_preview_command(), events, cancellation)
+    assert len(events.events) == 1
+    assert events.events[0].status is GenerationTerminalStatus.CANCELLED
+    assert events.events[0].message == ""
+    assert "Traceback" not in capsys.readouterr().err
+
+
 def test_run_tts_preview_counts_inferences_for_the_watchdog(monkeypatch) -> None:
     """Each completed preview advances the process-local inference count."""
     _install_preview_state(monkeypatch)

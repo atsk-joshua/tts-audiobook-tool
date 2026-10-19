@@ -11,6 +11,8 @@ class TtsBackendKind(Enum):
 
     LOCAL: the variant is run by its model library inside the current
     virtual environment (one venv per model, see `.agents/venv-models.md`).
+    MLX_AUDIO: the variant runs directly through MLX-Audio in the local worker;
+    several supported families share the same environment.
     SGL_OMNI: the variant is served over HTTP by an external SGL-Omni
     (SGLang) server.
     AUDIO_CPP: the variant is served by a local audio.cpp server.
@@ -20,6 +22,7 @@ class TtsBackendKind(Enum):
     """
 
     LOCAL = "local"
+    MLX_AUDIO = "mlx_audio"
     SGL_OMNI = "sgl_omni"
     AUDIO_CPP = "audio_cpp"
 

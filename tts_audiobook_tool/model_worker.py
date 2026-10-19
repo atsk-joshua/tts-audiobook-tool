@@ -557,7 +557,8 @@ def _should_watch_preview_inference() -> bool:
 
     if _preview_inferences_this_process == 0:
         return False
-    return Tts.get_instance_if_exists() is not None
+    instance = Tts.get_instance_if_exists()
+    return instance is not None and bool(getattr(instance, "is_loaded", True))
 
 
 def _run_tts_preview_command(
@@ -616,7 +617,12 @@ def _run_tts_preview_command(
         # the generation, so any load or init output precedes the heading, like
         # a regular generation run. Kept outside the watchdog scope: a slow
         # first load must not count against the inference deadline.
-        Tts.get_instance()
+        instance = Tts.get_instance()
+        if Tts.get_active_type().value.backend_kind is TtsBackendKind.MLX_AUDIO:
+            instance.prepare_for_project(state.project)
+            # MLX setup has completed outside the inference deadline. Watch
+            # even the first preview and the first preview after unloading.
+            watch_inference = True
         if interrupts.did_interrupt:
             event_queue.put(TtsPreviewFinished(
                 command.operation_id, GenerationTerminalStatus.CANCELLED,
@@ -678,12 +684,15 @@ def _run_tts_preview_command(
             )
         )
     except Exception as exception:
-        traceback.print_exc()
+        cancelled = cancellation_event.is_set()
+        if not cancelled:
+            traceback.print_exc()
         event_queue.put(
             TtsPreviewFinished(
                 operation_id=command.operation_id,
-                status=GenerationTerminalStatus.FAILED,
-                message=f"{type(exception).__name__}: {exception}",
+                status=(GenerationTerminalStatus.CANCELLED if cancelled
+                        else GenerationTerminalStatus.FAILED),
+                message="" if cancelled else f"{type(exception).__name__}: {exception}",
             )
         )
     finally:
@@ -1130,7 +1139,7 @@ def _model_worker_main(
                 else:
                     instance = Tts.get_instance()
                 device_type = instance.get_device_type()
-                device = device_type.value if device_type is not None else ""
+                device = device_type.value if device_type is not None else getattr(instance, "device_value", "")
                 blocking_issues = tuple(
                     issue.verbose
                     for issue in Tts.get_model_support(state.project).get_blocking_issues(
@@ -1208,11 +1217,13 @@ def _model_worker_main(
                     device_type = tts_instance.get_device_type()
                     if device_type is not None:
                         tts_device = device_type.value
+                    else:
+                        tts_device = getattr(tts_instance, "device_value", "")
                 event_queue.put(
                     ModelStateReported(
                         command.operation_id,
                         ModelStateSnapshot(
-                            tts_loaded=tts_instance is not None,
+                            tts_loaded=tts_instance is not None and bool(getattr(tts_instance, "is_loaded", True)),
                             tts_type_id=Tts.get_active_type().value.id,
                             tts_device=tts_device,
                             stt_loaded=Stt.has_instance(),
