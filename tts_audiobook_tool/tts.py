@@ -689,8 +689,7 @@ class Tts:
     @staticmethod
     def get_mlx_audio() -> TtsBaseModel:
         require_model_owner("TTS")
-        if Tts._force_cpu:
-            raise RuntimeError("Local (MLX-Audio) requires Apple Silicon / Metal; disable Force CPU")
+        # Force CPU controls Torch backends; it is hidden for native MLX.
         if Tts._mlx_audio is None:
             from tts_audiobook_tool.tts_models.mlx_audio_runtime import get_mlx_audio_runtime_class
             Tts._mlx_audio = get_mlx_audio_runtime_class(Tts._type.id)(Tts._type)

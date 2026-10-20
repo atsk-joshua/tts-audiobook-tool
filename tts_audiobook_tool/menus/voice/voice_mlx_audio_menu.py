@@ -1,4 +1,5 @@
 """Reuse project-managed reference audio, transcripts, crops and selection."""
+from tts_audiobook_tool import ask
 from tts_audiobook_tool.menus.menu_util import MenuItem, MenuUtil
 from tts_audiobook_tool.menus.voice.voice_menu_shared import VoiceMenuShared
 from tts_audiobook_tool.state import State
@@ -18,11 +19,15 @@ class VoiceMlxAudioMenu:
 
             def edit(current: State, _: MenuItem) -> None:
                 def apply(mode: str) -> None:
+                    previous = current.project.get_model_setting(definition.spec.id, "reference_mode")
                     current.project.set_model_setting(definition.spec.id, "reference_mode", mode)
-                    current.project.save()
+                    error = current.project.save()
+                    if error:
+                        current.project.set_model_setting(definition.spec.id, "reference_mode", previous)
+                        ask.ask_error(error)
                 MenuUtil.options_menu(
                     state=current, heading_text="Reference conditioning",
-                    labels=["Selected sample (single narrator)", "All project samples"],
+                    labels=["Selected sample (single narrator)", "All project samples (combined narrator conditioning)"],
                     values=["selected", "all"],
                     current_value=current.project.get_model_setting(definition.spec.id, "reference_mode"),
                     default_value="selected", on_select=apply, breadcrumb="References",
@@ -32,4 +37,10 @@ class VoiceMlxAudioMenu:
 
     @staticmethod
     def menu(state: State) -> None:
-        VoiceMenuShared.menu_wrapper(state, VoiceMenuShared.make_remote_items)
+        def note(current: State) -> str:
+            if (current.project.tts_model_type == "fish_drama3_mlxaudio"
+                    and current.project.get_model_setting("fish_drama3_mlxaudio", "reference_mode") == "all"):
+                return ("All samples condition one narrator together. Voice/line selections do not "
+                        "choose separate reference voices in this mode.")
+            return ""
+        VoiceMenuShared.menu_wrapper(state, VoiceMenuShared.make_remote_items, subheading=note)

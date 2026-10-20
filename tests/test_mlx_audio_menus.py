@@ -36,14 +36,15 @@ def labels(current, items):
 
 
 @pytest.mark.parametrize('model_id, controls', [
-    ('qwen3tts_mlxaudio', ['Temperature', 'Top-P', 'Top-K', 'Repetition penalty', 'Maximum tokens']),
-    ('fish_drama3_mlxaudio', ['Temperature', 'Top-P', 'Top-K', 'Maximum tokens']),
+    ('qwen3tts_mlxaudio', ['Temperature', 'Top-P', 'Top-K', 'Requested repetition penalty', 'Maximum tokens']),
+    ('fish_drama3_mlxaudio', ['Temperature', 'Top-P', 'Top-K', 'Acoustic frames per chunk']),
 ])
 def test_model_controls_follow_catalog(model_id, controls):
     current = state(model_id)
     text = labels(current, ModelMlxAudioMenu.make_items(current, get_mlx_audio_definition(model_id)))
-    assert text[0].startswith('Checkpoint ')
-    assert [line.split(' \x1b')[0] for line in text[1:-1]] == controls
+    assert [line.split(' \x1b')[0] for line in text[:-1]] == controls
+    assert 'Checkpoint' in get_string_from(current, ModelMlxAudioMenu.make_items(
+        current, get_mlx_audio_definition(model_id))[0].superlabel)
     assert text[-1].startswith('Seed ')
     assert not any('URL' in line for line in text)
 
@@ -109,9 +110,9 @@ def test_local_picker_avoids_remote_discovery(monkeypatch, mlx_environment):
 def test_shared_menu_redraw_tracks_family(monkeypatch, mlx_environment):
     current = state()
     monkeypatch.setattr(Tts, 'get_available_tts_models', lambda: list(mlx_environment))
-    assert any(line.startswith('Repetition penalty') for line in labels(current, ModelMenuShared.make_remote_items(current)))
+    assert any(line.startswith('Requested repetition penalty') for line in labels(current, ModelMenuShared.make_remote_items(current)))
     current.project.tts_model_type = 'fish_drama3_mlxaudio'
-    assert not any(line.startswith('Repetition penalty') for line in labels(current, ModelMenuShared.make_remote_items(current)))
+    assert not any(line.startswith('Requested repetition penalty') for line in labels(current, ModelMenuShared.make_remote_items(current)))
 
 
 def test_status_identifies_native_mlx_without_cpu_override(mlx_environment):
@@ -136,3 +137,40 @@ def test_startup_allows_only_compatible_multi_model_stacks(monkeypatch, mlx_envi
     else:
         with pytest.raises(SystemExit):
             current.init_tts_or_exit(False)
+
+
+@pytest.mark.parametrize('control', ['checkpoint', 'reference_mode'])
+def test_failed_mlx_save_restores_setting_and_does_not_unload(monkeypatch, control):
+    current = state('fish_drama3_mlxaudio')
+    definition = get_mlx_audio_definition(current.project.tts_model_type)
+    captured, errors = {}, []
+    monkeypatch.setattr(MenuUtil, 'options_menu', lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(Project, 'save', lambda self: 'Disk is full')
+    monkeypatch.setattr('tts_audiobook_tool.ask.ask_error', errors.append)
+    monkeypatch.setattr('tts_audiobook_tool.menus.model.model_mlx_audio_menu.ModelWorker.clear_models_if_running_blocking',
+                        lambda: pytest.fail('Unloaded after failed save'))
+    previous = current.project.get_model_setting(definition.spec.id, control)
+    if control == 'checkpoint':
+        current.project.set_model_setting(definition.spec.id, control, 'invalid')
+        previous = 'invalid'
+        item = ModelMlxAudioMenu.make_items(current, definition)[0]
+        new_value = definition.checkpoints[0].repo_id
+    else:
+        item = VoiceMlxAudioMenu.make_items(current, definition)[-1]
+        new_value = 'all'
+    item.handler(current, item)
+    captured['on_select'](new_value)
+    assert current.project.get_model_setting(definition.spec.id, control) == previous
+    assert errors == ['Disk is full']
+
+
+def test_mlx_runtime_ignores_persisted_torch_force_cpu(monkeypatch):
+    from tts_audiobook_tool import model_runtime
+    monkeypatch.setattr(model_runtime, '_role', model_runtime.ModelRuntimeRole.STANDALONE)
+    monkeypatch.setattr(Tts, '_force_cpu', True)
+    monkeypatch.setattr(Tts, '_mlx_audio', None)
+    monkeypatch.setattr(Tts, '_type', TtsModelType.require_by_id('qwen3tts_mlxaudio'))
+    runtime = Tts.get_mlx_audio()
+    assert runtime.model_type.id == 'qwen3tts_mlxaudio'
+    assert runtime._model is None
+    assert Tts._force_cpu is True

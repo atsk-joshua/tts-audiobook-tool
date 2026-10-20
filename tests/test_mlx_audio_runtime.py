@@ -650,3 +650,14 @@ def test_fish_budget_failure_rejects_audio_and_requests_fresh_seed(tmp_path, ext
     assert "increase" not in result
     assert delivered == []
     assert env.runtime.model is None and env.fake.closed == 1
+
+
+def test_printed_qwen_parameters_include_requested_and_effective_penalty(tmp_path, monkeypatch):
+    env = make_runtime(tmp_path)
+    reported = []
+    monkeypatch.setattr(env.runtime, 'print_params', reported.append)
+    result = env.runtime.generate_using_project(env.project, ['hello'], print_params=True)
+    assert not isinstance(result, str)
+    assert reported[0]['requested_repetition_penalty'] == 1.05
+    assert reported[0]['effective_repetition_penalty'] == 1.5
+    env.runtime.kill()

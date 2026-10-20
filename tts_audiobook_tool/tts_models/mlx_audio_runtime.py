@@ -385,7 +385,12 @@ class MlxAudioRuntime:
             kwargs = self.policy.build_kwargs(values, project.language_code, references, stream)
             self._mx.random.seed(seed)
             if print_params:
-                self.print_params({**values, "seed": seed, "checkpoint": checkpoint.label})
+                reported = {**values, "seed": seed, "checkpoint": checkpoint.label}
+                if self.definition.family == "qwen3_tts":
+                    requested = reported.pop("repetition_penalty")
+                    reported["requested_repetition_penalty"] = requested
+                    reported["effective_repetition_penalty"] = max(requested, 1.5)
+                self.print_params(reported)
             result = [self._generate_one(text, kwargs, on_stream_chunk if stream else None)
                       for text in prompts]
         except Exception as exc:

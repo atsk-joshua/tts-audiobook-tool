@@ -12,38 +12,31 @@
 
 Audio generation supports model-specific Native Local environments, **Local (MLX-Audio)** on Apple Silicon, and remote [SGL-Omni](https://github.com/sgl-project/sglang-omni) or [audio.cpp](https://github.com/0xShug0/audio.cpp) servers.
 
-**Local (MLX-Audio)** runs Qwen3-TTS Base and Fish Audio Drama 3 in the existing
-model worker, using one environment and no inference server. It requires Apple
-Silicon and Python 3.12. The dependency metadata permits macOS 14 or newer;
-macOS 26 has been tested, while older releases remain unverified. Run
-`./setup-mlx-audio.sh`, then
-`./venv-mlx-audio/bin/python -m tts_audiobook_tool` and choose a family under
-**Model settings > TTS model**. Existing projects keep their saved model selection;
-changing environments does not migrate them.
+**Local (MLX-Audio)** runs Qwen3-TTS Base and Fish Audio Drama 3 directly on Apple Silicon, using one shared environment and no inference server.
 
-| TTS model | Local | SGL-Omni | audio.cpp |
-| --- | :---: | :---: | :---: |
-| [AuK (Base, Flash)](https://github.com/Tencent-Hunyuan/AuK) | | ✅ | |
-| [Breeze TTS 2](https://github.com/breezeblue-ai/breeze-tts) | | | ✅ |
-| [Chatterbox (Multilingual V3, Turbo)](https://github.com/resemble-ai/chatterbox) | ✅ | ✅ | ✅ |
-| [dots.tts](https://github.com/studio-dots-ai/dots.tts) | ✅ | | ✅ |
-| [Echo-TTS](https://github.com/jordandare/echo-tts) | | | ✅ |
-| [FireRedTTS3](https://github.com/FireRedTeam/FireRedTTS3) | | | ✅ |
-| [Fish Audio Drama 3](https://huggingface.co/fishaudio/drama-3) | ✅ | | ✅ |
-| [Fish Speech S2-Pro](https://github.com/fishaudio/fish-speech) | ✅ | ✅ | ✅ |
-| [Fish Speech S1-mini](https://github.com/fishaudio/fish-speech) | ✅ | | |
-| [Fun-CosyVoice3](https://github.com/QwenAudio/CosyVoice) | | ✅ | ✅ |
-| [GLM-TTS](https://github.com/zai-org/GLM-TTS) | ✅ | | ✅ |
-| [Higgs Audio V2](https://github.com/boson-ai/higgs-audio) | ✅ | | |
-| [Higgs Audio V3](https://github.com/boson-ai/higgs-audio) | | ✅ | ✅ |
-| [IndexTTS2 (2, 2.5)](https://github.com/index-tts/index-tts) | ✅ | | ✅ |
-| [MiraTTS](https://github.com/ysharma3501/MiraTTS) | ✅ | | |
-| [MOSS-TTS v1.5 (Delay, Local)](https://github.com/OpenMOSS/MOSS-TTS) | ✅ | ✅ | ✅ |
-| [OmniVoice](https://github.com/k2-fsa/OmniVoice) | ✅ | | ✅ |
-| [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) | ✅ | | |
-| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | ✅ | ✅ | |
-| [VibeVoice](https://github.com/microsoft/VibeVoice) | ✅ | | |
-| [ZONOS2](https://github.com/Zyphra/ZONOS2) | | ✅ | |
+| TTS model | Local | MLX-Audio | SGL-Omni | audio.cpp |
+| --- | :---: | :---: | :---: | :---: |
+| [AuK (Base, Flash)](https://github.com/Tencent-Hunyuan/AuK) | | | ✅ | |
+| [Breeze TTS 2](https://github.com/breezeblue-ai/breeze-tts) | | | | ✅ |
+| [Chatterbox (Multilingual V3, Turbo)](https://github.com/resemble-ai/chatterbox) | ✅ | | ✅ | ✅ |
+| [dots.tts](https://github.com/studio-dots-ai/dots.tts) | ✅ | | | ✅ |
+| [Echo-TTS](https://github.com/jordandare/echo-tts) | | | | ✅ |
+| [FireRedTTS3](https://github.com/FireRedTeam/FireRedTTS3) | | | | ✅ |
+| [Fish Audio Drama 3](https://huggingface.co/fishaudio/drama-3) | | ✅ | | ✅ |
+| [Fish Speech S2-Pro](https://github.com/fishaudio/fish-speech) | ✅ | | ✅ | ✅ |
+| [Fish Speech S1-mini](https://github.com/fishaudio/fish-speech) | ✅ | | | |
+| [Fun-CosyVoice3](https://github.com/QwenAudio/CosyVoice) | | | ✅ | ✅ |
+| [GLM-TTS](https://github.com/zai-org/GLM-TTS) | ✅ | | | ✅ |
+| [Higgs Audio V2](https://github.com/boson-ai/higgs-audio) | ✅ | | | |
+| [Higgs Audio V3](https://github.com/boson-ai/higgs-audio) | | | ✅ | ✅ |
+| [IndexTTS2 (2, 2.5)](https://github.com/index-tts/index-tts) | ✅ | | | ✅ |
+| [MiraTTS](https://github.com/ysharma3501/MiraTTS) | ✅ | | | |
+| [MOSS-TTS v1.5 (Delay, Local)](https://github.com/OpenMOSS/MOSS-TTS) | ✅ | | ✅ | ✅ |
+| [OmniVoice](https://github.com/k2-fsa/OmniVoice) | ✅ | | | ✅ |
+| [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) | ✅ | | | |
+| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | ✅ | ✅ | ✅ | |
+| [VibeVoice](https://github.com/microsoft/VibeVoice) | ✅ | | | |
+| [ZONOS2](https://github.com/Zyphra/ZONOS2) | | | ✅ | |
 
 By themselves, these models are unreliable at book scale. The app wraps them in the tooling needed for effective long-form generation:
 
@@ -122,6 +115,7 @@ Clone the repository and cd into it:
 Create a Python virtual environment using the instructions below.
 
 - Local inference: Follow the section for each model you want to use.
+- MLX-Audio on Apple Silicon: Follow “Virtual environment for MLX-Audio.”
 - SGL-Omni or audio.cpp: Follow “Virtual environment for remote TTS servers.”
 
 Then return here.
@@ -567,6 +561,42 @@ Note that because Microsoft famously removed the source code from their github r
 
 <summary>
 
+### Virtual environment for MLX-Audio (Apple Silicon)
+
+</summary>
+
+Requires **Apple Silicon**, **Python v3.12**, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and ffmpeg in your system path. The pinned MLX/Metal dependencies permit macOS 14 or newer; runtime operation has been tested on macOS 26.5.2. Older eligible releases remain unverified.
+
+From the repository root, create a separate environment:
+
+    ./setup-mlx-audio.sh
+
+The script uses `uv` to locate or download Python 3.12 and installs `requirements-mlx-audio.txt`. It refuses to modify an existing environment. To install another copy, use a new path:
+
+    MLX_AUDIO_VENV=venv-mlx-audio-test ./setup-mlx-audio.sh
+
+If dependency installation fails, check the reported network, Git, or build error, then resume in the newly created environment:
+
+    uv pip install --python venv-mlx-audio/bin/python -r requirements-mlx-audio.txt
+
+For missing Git/ffmpeg or audio-library errors, install the named dependency and retry. The macOS audio wheels normally include libsndfile and PortAudio; custom/source builds may require these system libraries. Do not reuse an environment intended for another backend.
+
+Activate the environment and run the app:
+
+    source venv-mlx-audio/bin/activate
+    python -m tts_audiobook_tool
+
+Alternatively, `python launch.py` recognizes this as one **Local (MLX-Audio)** environment exposing both model families. Select a family under **Model settings > TTS model**, then add narrator audio under **Voices**. Supply its exact transcript; after trimming a reference, check the crop's transcript against the retained speech. Existing projects retain their saved model selection.
+
+Installation and first use need internet access. Checkpoint weights download from Hugging Face on first generation and occupy several GB in its cache; allow disk space and time for the download. Authentication, unavailable revisions, and network failures are reported when loading the selected checkpoint. Opening the model menus does not load weights. No inference server is required.
+
+</details>
+
+
+<details>
+
+<summary>
+
 ### Virtual environment for remote TTS servers (SGL-Omni + audio.cpp)
 
 </summary>
@@ -695,6 +725,26 @@ Zero-shot voice cloning is a first-class feature, supported for all models.
 - Streaming support (for the stand-alone server and LLM chat mode)
 - Music detection/rejection
 - CFG, steps, seed
+
+
+### MLX-Audio (Apple Silicon)
+
+Both families share the native application worker and the same Python environment. Voice samples, transcripts, trims, project settings, validation and export use the normal app workflow.
+
+**Qwen3-TTS Base**
+- Supported checkpoint: `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` (pinned revision)
+- One selected reference sample with its exact transcript; 24 kHz output
+- Temperature, top_p, top_k, repetition penalty, maximum generation tokens, seed
+- MLX-Audio's Base reference-cloning API applies a minimum effective repetition penalty of **1.5**, even when the saved requested value is lower
+- Streaming support (for the stand-alone server and LLM chat mode)
+- CustomVoice, VoiceDesign, other checkpoints, batching and cross-segment rolling continuation are not exposed by this backend
+
+**Fish Audio Drama 3**
+- Supported checkpoint: `mlx-community/fish-audio-drama-3-4bit` (pinned revision); 44.1 kHz output
+- One selected reference by default; optional **all project samples** conditions the same narrator using every sample and its exact transcript. This is not a separate-character voice assignment mode
+- Temperature, top_p, top_k, acoustic frame budget, seed; language is inferred from the text
+- The frame budget applies to **each internal acoustic chunk**, not the number of words in a book segment. Native chunking and within-call acoustic history remain active
+- Streaming support (for the stand-alone server and LLM chat mode); exhausted acoustic budgets reject the output with retry guidance
 
 
 ### SGL-Omni

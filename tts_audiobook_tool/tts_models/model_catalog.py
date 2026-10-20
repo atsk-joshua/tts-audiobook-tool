@@ -346,7 +346,7 @@ def parse_mlx_audio_declaration(entry: dict[str, Any], where: str) -> dict[str, 
     """Validate the small native backend contract without importing MLX."""
     group = _object(entry.get("mlx_audio"), f"{where}.mlx_audio", {"family", "checkpoints", "parameters"})
     family = _field(group, "family", f"{where}.mlx_audio", str)
-    if family not in ("qwen3_tts", "fish_drama3", "omnivoice"):
+    if family not in ("qwen3_tts", "fish_drama3"):
         _fail(f"{where}.mlx_audio.family", "unsupported MLX-Audio family")
     checkpoints = _field(group, "checkpoints", f"{where}.mlx_audio", list)
     if not checkpoints:

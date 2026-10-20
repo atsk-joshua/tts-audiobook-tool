@@ -101,3 +101,9 @@ def test_invalid_checkpoint_revision_rejected_by_catalog():
     entry = {'mlx_audio': {'family': 'qwen3_tts', 'checkpoints': [{'repo_id': 'org/model', 'revision': 'main', 'label': 'test'}], 'parameters': {}}}
     with pytest.raises(ValueError, match='immutable'):
         parse_mlx_audio_declaration(entry, 'test')
+
+
+def test_unimplemented_native_family_is_rejected():
+    entry = {'mlx_audio': {'family': 'omnivoice', 'checkpoints': [], 'parameters': {}}}
+    with pytest.raises(ValueError, match='unsupported MLX-Audio family'):
+        parse_mlx_audio_declaration(entry, 'test')
