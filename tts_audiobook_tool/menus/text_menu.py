@@ -308,6 +308,17 @@ def on_select_import(state: State, item: MenuItem) -> bool:
             raise Exception("Bad value")
     MenuUtil.print_screen_heading(state, heading)
 
+    # All models accept the ordinary import range. Resolve checkpoint policy
+    # only for a preserved experimental value after a model switch.
+    capabilities = (resolve_segmentation_capabilities(state.project)
+                    if state.project.max_words > MAX_WORDS_PER_SEGMENT_MAX else None)
+    if capabilities is not None and state.project.max_words > capabilities.max_words:
+        ask.ask_error(
+            make_segmentation_advisory(state.project, state.project.max_words)
+            + " Change Text > Segmentation settings > Max words per segment before importing."
+        )
+        return False
+
     # Confirm before invalidating text-dependent project data
     confirm_message = make_text_replacement_confirm_message(state.project)
     if confirm_message:
@@ -459,7 +470,8 @@ def on_ask_max_size(state: State, _) -> None:
     printt("This maximum applies to future text imports. Existing text and audio keep their applied segmentation.")
 
     capabilities = resolve_segmentation_capabilities(state.project)
-    reco = (capabilities.recommended_min_words, capabilities.recommended_max_words, "")
+    reco = (capabilities.recommended_min_words, capabilities.recommended_max_words,
+            capabilities.recommendation_label)
     printt(f"Recommended range: {COL_ACCENT}{TtsModelType.recommended_range_string(reco)}")
     warning = make_segmentation_advisory(state.project, state.project.max_words)
     if warning:
@@ -484,6 +496,12 @@ def make_segmentation_advisory(project: Project, max_words: int) -> str:
     """Describe model compatibility without altering a saved or applied limit."""
     capabilities = resolve_segmentation_capabilities(project)
     messages = []
+    if capabilities.max_words > MAX_WORDS_PER_SEGMENT_MAX:
+        messages.append(
+            f"Above {capabilities.recommended_max_words} words is experimental; "
+            f"the configurable ceiling of {capabilities.max_words} is not a qualified "
+            "operating range. Word limits do not replace acoustic generation budgets."
+        )
     if max_words > capabilities.max_words:
         messages.append(
             f"The saved {max_words}-word ceiling exceeds the selected model's "

@@ -73,7 +73,8 @@ class SegmentationInfoDialog(ModalScreen[None]):
             advisory += (
                 f"\nThe selected model's configurable maximum is "
                 f"{capabilities.max_words} words. The editor retains this book's "
-                "applied limit; use a compatible model for generation."
+                "applied limit. Future imports use the selected model's configurable range; "
+                "this difference does not establish a generation failure."
             )
         if advisory:
             info_lines.extend(["", advisory.strip()])
