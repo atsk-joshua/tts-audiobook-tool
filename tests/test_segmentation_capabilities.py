@@ -81,3 +81,12 @@ def test_long_book_roundtrip_preserves_identity_and_applied_settings():
     assert loaded.phrase_groups[0].voice_index == 2
     # Existing Torch continuation context is independent of expanded MLX prompts.
     assert ROLLING_CONTINUATION_MAX_WORDS == 160
+
+
+def test_legacy_recommendation_keeps_variant_label():
+    from tts_audiobook_tool.tts_models.chatterbox_base_model import ChatterboxType
+    project = Project(tts_model_type='chatterbox_local')
+    project.set_model_setting('chatterbox_local', 'type', ChatterboxType.MULTILINGUAL_V2)
+    caps = resolve_segmentation_capabilities(project)
+    assert (caps.recommended_min_words, caps.recommended_max_words) == (40, 40)
+    assert caps.recommendation_label == 'Chatterbox Multilingual V2'

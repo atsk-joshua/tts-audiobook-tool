@@ -239,8 +239,11 @@ All strategies receive a final max-word grouping pass. An already indivisible ph
 
 The default remains 40 words. Future-import ceilings can persist from 20 through
 320 without regrouping an existing book. The selected model controls the allowed
-range; supported MLX Qwen/Fish checkpoints allow 320, while other backends retain
-80 for future imports. Switching models preserves saved and applied settings.
+range; supported MLX Qwen/Fish checkpoints expose an experimental maximum of
+320, while other backends retain 80 for future imports. The recommended range
+remains 40–80; a configurable maximum is not hardware qualification of that range.
+Switching models preserves saved and applied settings, but a new import requires
+a saved ceiling within the selected model's range.
 MLX prompts are checked before inference; existing backends retain their synthesis
 behavior. Word counts do not replace native acoustic frame budgets.
 

@@ -89,6 +89,7 @@ def test_import_info_warns_for_existing_long_book_with_narrower_backend():
             assert "Max words per segment: 160" in content
             assert "editor retains this book's applied limit" in content
             assert "configurable maximum is 80 words" in content
+            assert "use a compatible model for generation" not in content
 
     asyncio.run(exercise())
     assert project.book.segmentation_settings.max_words_per_segment == 160
@@ -140,3 +141,27 @@ def test_settings_and_model_switch_roundtrip_preserves_book_audio_and_markers(tm
     description = text_menu.make_segmentation_settings_description(loaded)
     assert "future imports" in description
     assert "Current book: 160 words per segment; multiple sentences." in description
+
+
+@pytest.mark.parametrize('route', ['text', 'manual', 'epub'])
+def test_future_import_rejects_preserved_incompatible_ceiling_without_touching_book(tmp_path, monkeypatch, route):
+    project = Project(dir_path=str(tmp_path), tts_model_type='glm_local', max_words=240)
+    assert project.save() == ''
+    sentinel = tmp_path / 'segments' / 'existing.flac'
+    sentinel.write_bytes(b'protected existing audio')
+    messages = []
+    monkeypatch.setattr(text_menu.MenuUtil, 'print_screen_heading', lambda *args: None)
+    monkeypatch.setattr(text_menu.ask, 'ask_error', messages.append)
+    monkeypatch.setattr(text_menu.ask, 'ask_confirm', lambda *args: pytest.fail('Confirmed destructive replacement'))
+    assert text_menu.on_select_import(SimpleNamespace(project=project),
+        text_menu.MenuItem('', lambda *_: None, data=route)) is False
+    assert '240-word ceiling' in messages[0]
+    assert 'before importing' in messages[0]
+    assert sentinel.read_bytes() == b'protected existing audio'
+    assert project.max_words == 240
+
+
+@pytest.mark.parametrize('model_id', ['glm_local', 'chatterbox_local'])
+def test_legacy_recommendation_does_not_label_existing_range_experimental(model_id):
+    project = Project(tts_model_type=model_id)
+    assert 'experimental' not in text_menu.make_segmentation_advisory(project, 40)

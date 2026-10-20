@@ -20,10 +20,12 @@ class SegmentationCapabilities:
     max_words: int = MAX_WORDS_PER_SEGMENT_MAX
     recommended_min_words: int = 40
     recommended_max_words: int = 80
+    recommendation_label: str = ""
 
 
-# These checkpoints support native internal chunking. This configurable ceiling
-# is independent of acoustic frame budgets and is not a synthesis guarantee.
+# These checkpoints expose an experimental configurable ceiling, independent of
+# acoustic budgets and without a synthesis guarantee. Only Fish chunks text
+# internally; Qwen Base ICL streams audio from one generation sequence.
 _EXTENDED_PROMPT_CHECKPOINTS = {
     ("qwen3tts_mlxaudio", "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
      "a6eb4f68e4b056f1215157bb696209bc82a6db48"),
@@ -40,9 +42,10 @@ def resolve_segmentation_capabilities(project: Project) -> SegmentationCapabilit
     if definition is None:
         from tts_audiobook_tool.tts import Tts
         support = Tts.get_model_support(project)
-        recommended_min, recommended_max, _ = support.get_max_words_range_reco(project)
+        recommended_min, recommended_max, label = support.get_max_words_range_reco(project)
         return SegmentationCapabilities(
-            recommended_min_words=recommended_min, recommended_max_words=recommended_max)
+            recommended_min_words=recommended_min, recommended_max_words=recommended_max,
+            recommendation_label=label)
     try:
         checkpoint = definition.get_checkpoint(project)
     except ValueError:
