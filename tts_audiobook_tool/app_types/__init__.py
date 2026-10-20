@@ -583,7 +583,7 @@ SS_MAX_LEN_DESC = \
 SS_BALANCED_DESC = \
 """    Within each paragraph, group existing phrases toward three quarters of
       \"max words per segment\", preferring complete sentences and avoiding
-      very short prompts. Longer prompts remain opt-in."""
+      very short prompts. Paragraph and scene boundaries are preserved."""
 
 class SegmentationStrategy(tuple[str, str, str], Enum):
 

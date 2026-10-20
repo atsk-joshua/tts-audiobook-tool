@@ -124,3 +124,15 @@ def test_balanced_whole_section_is_repeatable_without_mutating_input():
             for group in groups
         ])
     assert snapshots[0] == snapshots[1]
+
+
+def test_balanced_large_single_paragraph_preserves_order_and_limits():
+    # Exercise one DP window across thousands of phrases, rather than many
+    # short paragraphs that reset the search before its bound matters.
+    phrases = [Phrase(f"Sentence {index} ends here. ", Reason.SENTENCE)
+               for index in range(6000)]
+    groups = PhraseGrouper.balanced_groups(phrases, 80)
+    assert all(0 < group.num_words <= 80 for group in groups)
+    flattened = [phrase for group in groups for phrase in group.phrases]
+    assert len(flattened) == len(phrases)
+    assert all(actual is expected for actual, expected in zip(flattened, phrases))
